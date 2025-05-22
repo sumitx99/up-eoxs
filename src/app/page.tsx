@@ -2,20 +2,18 @@
 // src/app/page.tsx
 'use client';
 
-import React, { useState, type FormEvent, useRef, useMemo } from 'react';
+import React, { useState, type FormEvent, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Scale, FileWarning, FileCheck2, UploadCloud, FileText, FileImage, FileSpreadsheet, CheckCircle2, AlertCircle, BadgeHelp, Info } from 'lucide-react';
+import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, CheckCircle2, AlertCircle, BadgeHelp, Info } from 'lucide-react';
 import { compareOrdersAction } from './actions';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const ALLOWED_FILE_TYPES = [
@@ -30,24 +28,12 @@ const ALLOWED_FILE_TYPES = [
 
 const ACCEPTED_EXTENSIONS_STRING = ".pdf, image/jpeg, image/png, image/webp, .csv, .xls, .xlsx";
 
-interface DisplayItem {
-  id: string;
-  field: string;
-  poValue: string;
-  soValue: string;
-  status: 'matched' | 'mismatched';
-  reason?: string;
-  matchQuality?: string;
-  isMatched: boolean;
-}
-
 export default function OrderComparatorPage() {
   const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
   const [salesOrderFile, setSalesOrderFile] = useState<File | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'matches' | 'mismatches'>('all');
 
   const purchaseOrderRef = useRef<HTMLInputElement>(null);
   const salesOrderRef = useRef<HTMLInputElement>(null);
@@ -56,7 +42,7 @@ export default function OrderComparatorPage() {
   const getFileIcon = (file: File | null) => {
     if (!file) return <UploadCloud className="h-4 w-4 mr-2 text-muted-foreground" />;
     if (file.type.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-primary" />;
-    if (file.type === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-red-600" />; // Changed color to be more 'destructive' like
+    if (file.type === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-red-600" />;
     if (file.type === "text/csv" || file.name.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />;
     if (file.type.includes("excel") || file.type.includes("spreadsheetml") || file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700" />;
     return <FileText className="h-4 w-4 mr-2 text-gray-500" />;
@@ -93,7 +79,6 @@ export default function OrderComparatorPage() {
     setIsLoading(true);
     setError(null);
     setComparisonResult(null);
-    setActiveTab('all'); // Reset tab on new submission
 
     if (!purchaseOrderFile || !salesOrderFile) {
       setError("Please upload both purchase order and sales order documents.");
@@ -127,117 +112,6 @@ export default function OrderComparatorPage() {
       });
     }
     setIsLoading(false);
-  };
-
-  const allDisplayItems = useMemo((): DisplayItem[] => {
-    if (!comparisonResult) return [];
-    const items: DisplayItem[] = [];
-
-    (comparisonResult.matchedItems || []).forEach((item, index) => {
-      items.push({
-        id: `match-${index}-${item.field.replace(/\s+/g, '-')}`, // Ensure ID is valid
-        field: item.field,
-        poValue: item.value,
-        soValue: item.value,
-        status: 'matched',
-        matchQuality: item.matchQuality || 'Exact',
-        isMatched: true,
-      });
-    });
-
-    (comparisonResult.discrepancies || []).forEach((d, index) => {
-      items.push({
-        id: `disc-${index}-${d.field.replace(/\s+/g, '-')}`, // Ensure ID is valid
-        field: d.field,
-        poValue: d.purchaseOrderValue,
-        soValue: d.salesOrderValue,
-        status: 'mismatched',
-        reason: d.reason,
-        isMatched: false,
-      });
-    });
-    return items.sort((a, b) => a.field.localeCompare(b.field)); // Sort by field name for consistency
-  }, [comparisonResult]);
-
-  const filteredDisplayItems = useMemo(() => {
-    if (activeTab === 'all') return allDisplayItems;
-    if (activeTab === 'matches') return allDisplayItems.filter(item => item.isMatched);
-    if (activeTab === 'mismatches') return allDisplayItems.filter(item => !item.isMatched);
-    return [];
-  }, [allDisplayItems, activeTab]);
-
-  const matchedCount = useMemo(() => allDisplayItems.filter(item => item.isMatched).length, [allDisplayItems]);
-  const mismatchedCount = useMemo(() => allDisplayItems.filter(item => !item.isMatched).length, [allDisplayItems]);
-  const totalCount = allDisplayItems.length;
-
-  const RenderComparisonTable = ({ items }: { items: DisplayItem[] }) => {
-    if (items.length === 0) {
-      let title = "No Items";
-      let description = "No items to display for the current filter.";
-      if (activeTab === 'all' && totalCount === 0 && !isLoading) title = "No Comparison Data";
-      if (activeTab === 'all' && totalCount === 0 && !isLoading) description = "Upload documents and compare to see results.";
-      else if (activeTab === 'matches') { title = "No Matches"; description = "No matching items were found."; }
-      else if (activeTab === 'mismatches') { title = "No Mismatches"; description = "No discrepancies were found."; }
-      
-      return (
-        <Alert variant="default" className="mt-4">
-          <Info className="h-5 w-5" />
-          <AlertTitle>{title}</AlertTitle>
-          <AlertDescription>{description}</AlertDescription>
-        </Alert>
-      );
-    }
-    return (
-      <div className="border rounded-md overflow-hidden max-h-[450px] overflow-y-auto mt-4">
-        <Table>
-          <TableHeader className="bg-muted/50 sticky top-0 z-10">
-            <TableRow>
-              <TableHead className="font-semibold w-[30%]">Field</TableHead>
-              <TableHead className="font-semibold w-[27%]">PO Value</TableHead>
-              <TableHead className="font-semibold w-[27%]">SO Value</TableHead>
-              <TableHead className="font-semibold w-[16%] text-center">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow 
-                key={item.id} 
-                className={`${item.isMatched ? 'hover:bg-accent/10' : 'hover:bg-destructive/10'} 
-                           ${item.isMatched && item.id.startsWith('match-') ? (parseInt(item.id.split('-')[1]) % 2 === 0 ? 'bg-transparent' : 'bg-accent/5') : ''}
-                           ${!item.isMatched && item.id.startsWith('disc-') ? (parseInt(item.id.split('-')[1]) % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5') : ''}
-                          `}
-              >
-                <TableCell className="font-medium py-3 px-4">{item.field}</TableCell>
-                <TableCell className="py-3 px-4">{item.poValue}</TableCell>
-                <TableCell className="py-3 px-4">{item.soValue}</TableCell>
-                <TableCell className="text-center py-3 px-4">
-                  {item.isMatched ? (
-                    <Tooltip delayDuration={100}>
-                      <TooltipTrigger asChild>
-                        <CheckCircle2 className="h-5 w-5 text-accent inline-block" />
-                      </TooltipTrigger>
-                       <TooltipContent className="bg-accent text-accent-foreground p-2 rounded-md shadow-lg">
-                        <p>Matched ({item.matchQuality || 'Exact'})</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip delayDuration={100}>
-                      <TooltipTrigger asChild>
-                        <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg max-w-xs">
-                        <p className="font-semibold">Discrepancy Reason:</p>
-                        <p className="text-sm">{item.reason || 'No specific reason provided.'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
   };
 
   return (
@@ -325,9 +199,11 @@ export default function OrderComparatorPage() {
           <Card className="shadow-lg">
             <CardHeader>
               <CardTitle className="text-2xl">Comparison Report</CardTitle>
-               {/* Removed CardDescription here, will be handled by content below */}
+              <CardDescription>
+                Review the comparison summary, matched items, and detailed discrepancies.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="min-h-[300px] flex flex-col"> {/* Removed justify-center to allow natural flow */}
+            <CardContent className="min-h-[300px] flex flex-col">
               {isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -343,7 +219,7 @@ export default function OrderComparatorPage() {
                 </Alert>
               )}
               {!isLoading && !error && comparisonResult && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
                       <BadgeHelp className="mr-2 h-6 w-6 text-primary" /> AI Summary
@@ -353,28 +229,87 @@ export default function OrderComparatorPage() {
                     </p>
                   </div>
 
-                  <div className="flex justify-end space-x-2 my-4">
-                    <Badge variant="outline" className="text-sm py-1 px-3">Total: {totalCount}</Badge>
-                    <Badge variant="default" className="bg-accent text-accent-foreground hover:bg-accent/90 text-sm py-1 px-3">Matches: {matchedCount}</Badge>
-                    <Badge variant="destructive" className="text-sm py-1 px-3">Mismatches: {mismatchedCount}</Badge>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                      <CheckCircle2 className="mr-2 h-6 w-6 text-accent" /> Matched Items
+                    </h3>
+                    {(comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0) ? (
+                      <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
+                        <Table>
+                          <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                            <TableRow>
+                              <TableHead className="font-semibold w-[45%]">Field</TableHead>
+                              <TableHead className="font-semibold w-[35%]">Matched Value</TableHead>
+                              <TableHead className="font-semibold w-[20%] text-center">Quality</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {comparisonResult.matchedItems.map((item, index) => (
+                              <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
+                                <TableCell className="font-medium py-3 px-4">{item.field}</TableCell>
+                                <TableCell className="py-3 px-4">{item.value}</TableCell>
+                                <TableCell className="text-center py-3 px-4">
+                                  <span className="capitalize">{item.matchQuality || 'Exact'}</span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <Alert variant="default" className="mt-2">
+                        <Info className="h-5 w-5" />
+                        <AlertTitle>No Matched Items</AlertTitle>
+                        <AlertDescription>No matching items were identified between the documents.</AlertDescription>
+                      </Alert>
+                    )}
                   </div>
 
-                  <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'matches' | 'mismatches')} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 mb-2">
-                      <TabsTrigger value="all">All Items</TabsTrigger>
-                      <TabsTrigger value="matches">Matches</TabsTrigger>
-                      <TabsTrigger value="mismatches">Mismatches</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="all">
-                      <RenderComparisonTable items={filteredDisplayItems} />
-                    </TabsContent>
-                    <TabsContent value="matches">
-                       <RenderComparisonTable items={filteredDisplayItems} />
-                    </TabsContent>
-                    <TabsContent value="mismatches">
-                       <RenderComparisonTable items={filteredDisplayItems} />
-                    </TabsContent>
-                  </Tabs>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                      <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> Discrepancies
+                    </h3>
+                    {(comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0) ? (
+                       <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
+                        <Table>
+                          <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                            <TableRow>
+                              <TableHead className="font-semibold w-[30%]">Field</TableHead>
+                              <TableHead className="font-semibold w-[27%]">PO Value</TableHead>
+                              <TableHead className="font-semibold w-[27%]">SO Value</TableHead>
+                              <TableHead className="font-semibold w-[16%] text-center">Reason</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {comparisonResult.discrepancies.map((d, index) => (
+                              <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
+                                <TableCell className="font-medium py-3 px-4">{d.field}</TableCell>
+                                <TableCell className="py-3 px-4">{d.purchaseOrderValue}</TableCell>
+                                <TableCell className="py-3 px-4">{d.salesOrderValue}</TableCell>
+                                <TableCell className="text-center py-3 px-4">
+                                  <Tooltip delayDuration={100}>
+                                    <TooltipTrigger asChild>
+                                      <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg max-w-xs">
+                                      <p className="font-semibold">Discrepancy Reason:</p>
+                                      <p className="text-sm">{d.reason || 'No specific reason provided.'}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                       <Alert variant="default" className="mt-2">
+                        <Info className="h-5 w-5" />
+                        <AlertTitle>No Discrepancies Found</AlertTitle>
+                        <AlertDescription>No discrepancies were identified between the documents.</AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
                 </div>
               )}
               {!isLoading && !error && !comparisonResult && (
@@ -399,4 +334,4 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
-
+    
