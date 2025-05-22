@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 'use client';
 
@@ -360,9 +361,9 @@ export default function OrderComparatorPage() {
 
                   <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'matches' | 'mismatches')} className="w-full">
                     <TabsList className="grid w-full grid-cols-3 mb-2">
-                      <TabsTrigger value="all">All Items ({totalCount})</TabsTrigger>
-                      <TabsTrigger value="matches">Matches ({matchedCount})</TabsTrigger>
-                      <TabsTrigger value="mismatches">Mismatches ({mismatchedCount})</TabsTrigger>
+                      <TabsTrigger value="all">All Items</TabsTrigger>
+                      <TabsTrigger value="matches">Matches</TabsTrigger>
+                      <TabsTrigger value="mismatches">Mismatches</TabsTrigger>
                     </TabsList>
                     <TabsContent value="all">
                       <RenderComparisonTable items={filteredDisplayItems} />
@@ -398,3 +399,4 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
+
