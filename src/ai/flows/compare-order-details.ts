@@ -40,7 +40,7 @@ export type MatchedItem = z.infer<typeof MatchedItemSchema>;
 const CompareOrderDetailsOutputSchema = z.object({
   discrepancies: z.array(DiscrepancySchema).describe('An array of discrepancies found between the purchase order and sales order documents. This should always be an array, even if empty.'),
   matchedItems: z.array(MatchedItemSchema).describe('An array of items/fields that match between the purchase order and sales order documents. This should always be an array, even if empty. Strive to find matches for common header fields.'),
-  summary: z.string().describe('A summary of the comparison, highlighting key discrepancies and confirmed matches found in the document contents.'),
+  summary: z.string().describe('A summary of the comparison, highlighting key discrepancies and confirmed matches found in the document contents. If any limitations were encountered processing the entirety of any document, this must be noted here.'),
 });
 
 export type CompareOrderDetailsOutput = z.infer<typeof CompareOrderDetailsOutputSchema>;
@@ -59,6 +59,8 @@ const compareOrderDetailsPrompt = ai.definePrompt({
   },
   prompt: `You are an AI assistant specializing in comparing purchase orders (POs) and sales orders (SOs) provided as various document types.
 Your task is to meticulously analyze the **entire content** of both documents, from start to finish, including all pages, headers, footers, and line items. Identify discrepancies AND matching items in product names (including item codes or SKUs if present), quantities, unit prices, total prices, discounts (line item and overall), taxes (line item and overall), shipping costs, PO Number, Buyer, Vendor, Payment Terms, Freight Terms, Total Amount, and any other relevant financial or item-specific details. Do not stop processing part-way through a document.
+
+It is absolutely critical for the accuracy of this task that every piece of information, from all pages and all sections of both documents, is meticulously reviewed and considered. Incomplete analysis or overlooking any part of the documents will lead to incorrect and unusable results.
 
 The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) format.
 - If the document is an image, perform OCR to extract textual content.
@@ -86,7 +88,7 @@ Based on your analysis of the document contents:
     *   'value': The common value found in both documents for that field.
     *   'matchQuality': (Optional) Describe the quality of the match. Use 'exact' if the values are identical. Use 'normalized' if they match after minor adjustments like case changes or removing extra spaces. Use 'inferred' if the match is clear from context despite slight wording differences. Default to 'exact' if not specified.
 
-Provide a concise 'summary' of the comparison in the 'summary' field. This summary should highlight the most significant discrepancies and also mention key confirmed matches.
+Provide a concise 'summary' of the comparison in the 'summary' field. This summary should highlight the most significant discrepancies and also mention key confirmed matches. **If, for any reason (e.g., document length, complexity, unreadable sections), you were unable to process the entirety of either document, you MUST explicitly state this limitation in your summary.**
 
 **Important Output Structure:**
 - The 'discrepancies' array should always be present in the output. If no discrepancies are found, it should be an empty array (\`[]\`).
