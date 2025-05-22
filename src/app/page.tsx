@@ -232,7 +232,7 @@ export default function OrderComparatorPage() {
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
                       <CheckCircle2 className="mr-2 h-6 w-6 text-accent" />
-                      Matched Items {comparisonResult.matchedItems && `(${comparisonResult.matchedItems.length})`}
+                       Matched Items
                     </h3>
                     {(comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0) ? (
                       <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
@@ -269,7 +269,7 @@ export default function OrderComparatorPage() {
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
                       <AlertCircle className="mr-2 h-6 w-6 text-destructive" />
-                      Discrepancies {comparisonResult.discrepancies && `(${comparisonResult.discrepancies.length})`}
+                       Discrepancies
                     </h3>
                     {(comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0) ? (
                        <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
@@ -336,6 +336,8 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
+    
+
     
 
     
