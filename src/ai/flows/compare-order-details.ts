@@ -58,15 +58,15 @@ const compareOrderDetailsPrompt = ai.definePrompt({
     schema: CompareOrderDetailsOutputSchema,
   },
   prompt: `You are an AI assistant specializing in comparing purchase orders (POs) and sales orders (SOs) provided as various document types.
-Your task is to meticulously analyze the content of both documents and identify discrepancies AND matching items in product names (including item codes or SKUs if present), quantities, unit prices, total prices, discounts (line item and overall), taxes (line item and overall), shipping costs, PO Number, Buyer, Vendor, Payment Terms, Freight Terms, Total Amount, and any other relevant financial or item-specific details.
+Your task is to meticulously analyze the **entire content** of both documents, from start to finish, including all pages, headers, footers, and line items. Identify discrepancies AND matching items in product names (including item codes or SKUs if present), quantities, unit prices, total prices, discounts (line item and overall), taxes (line item and overall), shipping costs, PO Number, Buyer, Vendor, Payment Terms, Freight Terms, Total Amount, and any other relevant financial or item-specific details. Do not stop processing part-way through a document.
 
 The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) format.
 - If the document is an image, perform OCR to extract textual content.
 - If the document is a CSV or Excel file, parse the tabular data to identify order details. Look for headers like 'Product', 'Item', 'Quantity', 'Price', 'Amount', 'Discount', 'Tax', 'PO Number', 'Buyer', 'Vendor', 'Payment Terms', etc.
-- If the document is a PDF, extract its textual content.
+- If the document is a PDF, extract its textual content thoroughly from all pages.
 
 Analyze the content of the following Purchase Order document and Sales Order document:
-
+Ensure you process all pages and sections of each document.
 Purchase Order Document:
 {{media url=purchaseOrder}}
 
@@ -92,7 +92,7 @@ Provide a concise 'summary' of the comparison in the 'summary' field. This summa
 - The 'discrepancies' array should always be present in the output. If no discrepancies are found, it should be an empty array (\`[]\`).
 - The 'matchedItems' array should always be present in the output. If no matches are found after careful comparison, it should be an empty array (\`[]\`). Strive to find matches for common header fields (e.g., PO Number, Buyer Name, Vendor Name) if they are consistent, even if other details differ.
 
-Be thorough and accurate. If the document content is unreadable, ambiguous, or crucial sections are missing, note this limitation in your summary.
+Be thorough, accurate, and **process all provided content from all document types**. If the document content is unreadable, ambiguous, or crucial sections are missing, note this limitation in your summary.
 If dealing with CSV/Excel, clearly state if the structure made it difficult to extract specific fields.
 Ensure all fields in the output schema (discrepancies, matchedItems, summary) are populated according to your findings.
 `,
@@ -159,3 +159,4 @@ const compareOrderDetailsFlow = ai.defineFlow(
     }
   }
 );
+
