@@ -3,10 +3,10 @@
 'use server';
 
 /**
- * @fileOverview Compares product names, quantities, discounts, and taxes between a purchase order and a sales order using AI.
+ * @fileOverview Compares product names, quantities, discounts, and taxes between a purchase order and a sales order PDF using AI.
  *
- * - compareOrderDetails - Compares order details and identifies discrepancies.
- * - CompareOrderDetailsInput - The input type for the compareOrderDetails function.
+ * - compareOrderDetails - Compares order details from PDF content and identifies discrepancies.
+ * - CompareOrderDetailsInput - The input type for the compareOrderDetails function, expecting PDF files as data URIs.
  * - CompareOrderDetailsOutput - The output type for the compareOrderDetails function.
  */
 
@@ -14,8 +14,8 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const CompareOrderDetailsInputSchema = z.object({
-  purchaseOrder: z.string().describe('The purchase order details as a string.'),
-  salesOrder: z.string().describe('The sales order details as a string.'),
+  purchaseOrder: z.string().describe("The purchase order PDF file as a data URI. Expected format: 'data:application/pdf;base64,<encoded_data>'."),
+  salesOrder: z.string().describe("The sales order PDF file as a data URI. Expected format: 'data:application/pdf;base64,<encoded_data>'."),
 });
 export type CompareOrderDetailsInput = z.infer<typeof CompareOrderDetailsInputSchema>;
 
@@ -23,12 +23,12 @@ const DiscrepancySchema = z.object({
   field: z.string().describe('The field with a discrepancy (e.g., product name, quantity, discount, tax).'),
   purchaseOrderValue: z.string().describe('The value from the purchase order.'),
   salesOrderValue: z.string().describe('The value from the sales order.'),
-  reason: z.string().describe('The reason for the discrepancy.'),
+  reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch.'),
 });
 
 const CompareOrderDetailsOutputSchema = z.object({
-  discrepancies: z.array(DiscrepancySchema).describe('An array of discrepancies found between the purchase order and sales order.'),
-  summary: z.string().describe('A summary of the comparison, highlighting key discrepancies.'),
+  discrepancies: z.array(DiscrepancySchema).describe('An array of discrepancies found between the purchase order and sales order PDFs.'),
+  summary: z.string().describe('A summary of the comparison, highlighting key discrepancies found in the PDF contents.'),
 });
 
 export type CompareOrderDetailsOutput = z.infer<typeof CompareOrderDetailsOutputSchema>;
@@ -45,20 +45,54 @@ const compareOrderDetailsPrompt = ai.definePrompt({
   output: {
     schema: CompareOrderDetailsOutputSchema,
   },
-  prompt: `You are an AI assistant specializing in comparing purchase orders and sales orders.
-  Your task is to identify discrepancies in product names, quantities, discounts, and taxes between the two orders.
+  prompt: `You are an AI assistant specializing in comparing purchase orders (POs) and sales orders (SOs) provided as PDF documents.
+Your task is to meticulously analyze the content of both PDF documents and identify discrepancies in product names (including item codes or SKUs if present), quantities, unit prices, total prices, discounts (line item and overall), taxes (line item and overall), shipping costs, and any other relevant financial or item-specific details.
 
-  Analyze the following purchase order and sales order details:
+When reporting discrepancies:
+- For product mismatches, consider variations in naming, descriptions, or product codes.
+- For quantity or price differences, clearly state the values from both documents.
+- If a discount or tax is present in one document but not the other, or if the rates/amounts differ, highlight this.
+- Pay attention to grand totals and payment terms if available.
 
-  Purchase Order:
-  {{purchaseOrder}}
+Analyze the content of the following Purchase Order PDF and Sales Order PDF:
 
-  Sales Order:
-  {{salesOrder}}
+Purchase Order PDF Content:
+{{media url=purchaseOrder}}
 
-  Identify any discrepancies and provide a detailed report, including the field with the discrepancy, the values from both orders, and the reason for the discrepancy.
-  Also provide a summary of the comparison, highlighting the key discrepancies.
-  `,
+Sales Order PDF Content:
+{{media url=salesOrder}}
+
+Based on your analysis of the PDF contents, identify all discrepancies. For each discrepancy, specify:
+1.  'field': The specific field or item that has a discrepancy (e.g., "Product 'ABC' Quantity", "Overall Discount", "Tax Rate for Item 'XYZ'", "Shipping Cost").
+2.  'purchaseOrderValue': The value of this field as found in the Purchase Order PDF. If the field is not found, state "Not specified" or "N/A".
+3.  'salesOrderValue': The value of this field as found in the Sales Order PDF. If the field is not found, state "Not specified" or "N/A".
+4.  'reason': A brief explanation of the discrepancy (e.g., "Quantity differs", "Discount applied in PO but not in SO", "Unit price mismatch").
+
+Provide a concise 'summary' of the comparison, highlighting the most significant discrepancies or confirming if the orders largely match. If no discrepancies are found, the summary should state that, and the discrepancies array should be empty.
+Be thorough and accurate. If the PDF content is unreadable or crucial sections are missing, note this limitation in your summary.
+`,
+  // Loosen safety settings slightly for potentially complex financial documents, but be mindful.
+  // This is an example; adjust as needed based on typical content.
+  config: {
+    safetySettings: [
+      {
+        category: 'HARM_CATEGORY_HARASSMENT',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+      {
+        category: 'HARM_CATEGORY_HATE_SPEECH',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+      {
+        category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+      {
+        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+      },
+    ],
+  }
 });
 
 const compareOrderDetailsFlow = ai.defineFlow(
@@ -68,7 +102,23 @@ const compareOrderDetailsFlow = ai.defineFlow(
     outputSchema: CompareOrderDetailsOutputSchema,
   },
   async input => {
-    const {output} = await compareOrderDetailsPrompt(input);
-    return output!;
+    try {
+      const {output} = await compareOrderDetailsPrompt(input);
+      if (!output) {
+        // This case should ideally be handled by Genkit if the model fails to produce schema-compliant output.
+        // However, providing a fallback or more specific error can be useful.
+        console.error('CompareOrderDetailsFlow: AI model returned null or undefined output.');
+        throw new Error('AI model failed to return valid comparison data.');
+      }
+      return output;
+    } catch (error) {
+      console.error("Error in compareOrderDetailsFlow: ", error);
+      // Re-throw or handle error as appropriate for your application's error handling strategy
+      // Potentially wrap in a more user-friendly error message or specific error type
+      if (error instanceof Error && (error.message.includes('CLIENT_ERROR') || error.message.toLowerCase().includes('unsupported mime type') || error.message.toLowerCase().includes('failed to parse content from bytes'))) {
+        throw new Error(`The AI model could not process one or both of the PDF files. Please ensure they are valid PDFs and try again. Details: ${error.message}`);
+      }
+      throw error;
+    }
   }
 );
