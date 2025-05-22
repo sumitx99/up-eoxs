@@ -5,14 +5,26 @@ import { useState, type FormEvent, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input'; // Changed from Textarea
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Scale, FileWarning, FileCheck2, UploadCloud, FileText } from 'lucide-react';
+import { Loader2, Scale, FileWarning, FileCheck2, UploadCloud, FileText, FileImage, FileSpreadsheet } from 'lucide-react';
 import { compareOrdersAction } from './actions';
 import type { CompareOrderDetailsOutput } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
+
+const ALLOWED_FILE_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/csv",
+  "application/vnd.ms-excel", // .xls
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" // .xlsx
+];
+
+const ACCEPTED_EXTENSIONS_STRING = ".pdf, image/jpeg, image/png, image/webp, .csv, .xls, .xlsx";
 
 export default function OrderComparatorPage() {
   const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
@@ -25,17 +37,27 @@ export default function OrderComparatorPage() {
   const salesOrderRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const getFileIcon = (file: File | null) => {
+    if (!file) return <UploadCloud className="h-4 w-4 mr-2 text-muted-foreground" />;
+    if (file.type.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-blue-500" />;
+    if (file.type === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-red-500" />;
+    if (file.type === "text/csv" || file.name.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-500" />;
+    if (file.type.includes("excel") || file.type.includes("spreadsheetml") || file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700" />;
+    return <FileText className="h-4 w-4 mr-2 text-gray-500" />;
+  };
+
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, setFile: React.Dispatch<React.SetStateAction<File | null>>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type === "application/pdf") {
+      if (ALLOWED_FILE_TYPES.includes(file.type) || file.name.endsWith('.csv') || file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
         setFile(file);
         setError(null); // Clear previous errors
       } else {
         toast({
           variant: "destructive",
           title: "Invalid File Type",
-          description: "Please upload a PDF file.",
+          description: `Please upload a supported file type: PDF, Image (JPEG, PNG, WebP), CSV, Excel (.xls, .xlsx). You provided: ${file.type || 'unknown'}.`,
         });
         setFile(null);
         if (event.target) {
@@ -54,12 +76,12 @@ export default function OrderComparatorPage() {
     setComparisonResult(null);
 
     if (!purchaseOrderFile || !salesOrderFile) {
-      setError("Please upload both purchase order and sales order PDF files.");
+      setError("Please upload both purchase order and sales order documents.");
       setIsLoading(false);
       toast({
         variant: "destructive",
         title: "Missing Files",
-        description: "Please upload both PDF files to compare.",
+        description: "Please upload both documents to compare.",
       });
       return;
     }
@@ -72,6 +94,10 @@ export default function OrderComparatorPage() {
 
     if (result.data) {
       setComparisonResult(result.data);
+       toast({
+        title: "Comparison Complete",
+        description: "The order documents have been compared successfully.",
+      });
     } else if (result.error) {
       setError(result.error);
       toast({
@@ -92,27 +118,27 @@ export default function OrderComparatorPage() {
           <h1 className="text-4xl font-bold text-foreground">Order Comparator</h1>
         </div>
         <p className="text-muted-foreground text-lg">
-          AI-powered tool to compare purchase orders and sales orders from PDF files.
+          AI-powered tool to compare purchase and sales orders from various document types.
         </p>
       </header>
 
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl">Input Order PDFs</CardTitle>
+            <CardTitle className="text-2xl">Input Order Documents</CardTitle>
             <CardDescription>
-              Upload your purchase order and sales order PDF files below.
+              Upload your purchase order and sales order documents (PDF, Image, CSV, Excel).
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order PDF</Label>
+                <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
                 <div className="flex items-center space-x-2">
                     <Input
                       id="purchaseOrder"
                       type="file"
-                      accept=".pdf"
+                      accept={ACCEPTED_EXTENSIONS_STRING}
                       ref={purchaseOrderRef}
                       onChange={(e) => handleFileChange(e, setPurchaseOrderFile)}
                       className="focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
@@ -122,17 +148,17 @@ export default function OrderComparatorPage() {
                 </div>
                  {purchaseOrderFile && (
                   <p className="text-sm text-muted-foreground flex items-center mt-2">
-                    <FileText className="h-4 w-4 mr-2 text-green-500" /> Selected: {purchaseOrderFile.name}
+                    {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
                   </p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="salesOrder" className="text-lg font-medium">Sales Order PDF</Label>
+                <Label htmlFor="salesOrder" className="text-lg font-medium">Sales Order Document</Label>
                  <div className="flex items-center space-x-2">
                     <Input
                       id="salesOrder"
                       type="file"
-                      accept=".pdf"
+                      accept={ACCEPTED_EXTENSIONS_STRING}
                       ref={salesOrderRef}
                       onChange={(e) => handleFileChange(e, setSalesOrderFile)}
                       className="focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
@@ -142,7 +168,7 @@ export default function OrderComparatorPage() {
                 </div>
                 {salesOrderFile && (
                   <p className="text-sm text-muted-foreground flex items-center mt-2">
-                    <FileText className="h-4 w-4 mr-2 text-green-500" /> Selected: {salesOrderFile.name}
+                    {getFileIcon(salesOrderFile)} Selected: {salesOrderFile.name} ({Math.round(salesOrderFile.size / 1024)} KB)
                   </p>
                 )}
               </div>
@@ -152,12 +178,12 @@ export default function OrderComparatorPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Comparing PDFs...
+                    Comparing Documents...
                   </>
                 ) : (
                   <>
                     <UploadCloud className="mr-2 h-5 w-5" />
-                    Compare Order PDFs
+                    Compare Order Documents
                   </>
                 )}
               </Button>
@@ -169,15 +195,15 @@ export default function OrderComparatorPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Comparison Report</CardTitle>
             <CardDescription>
-              Review the comparison summary and detailed discrepancies from the PDFs.
+              Review the comparison summary and detailed discrepancies from the documents.
             </CardDescription>
           </CardHeader>
           <CardContent className="min-h-[300px] flex flex-col justify-center">
             {isLoading && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                 <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                <p className="text-lg">Comparing PDF orders, please wait...</p>
-                <p className="text-sm">This may take a moment depending on PDF size and complexity.</p>
+                <p className="text-lg">Comparing documents, please wait...</p>
+                <p className="text-sm">This may take a moment depending on file size and complexity.</p>
               </div>
             )}
             {error && !isLoading && (
@@ -225,7 +251,7 @@ export default function OrderComparatorPage() {
                        <FileCheck2 className="h-5 w-5 text-accent-foreground" />
                        <AlertTitle className="text-accent-foreground">No Discrepancies Found</AlertTitle>
                        <AlertDescription className="text-accent-foreground/80">
-                         The AI found no discrepancies between the provided PDF orders.
+                         The AI found no discrepancies between the provided documents.
                        </AlertDescription>
                      </Alert>
                   )}
@@ -235,7 +261,7 @@ export default function OrderComparatorPage() {
             {!isLoading && !error && !comparisonResult && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center">
                 <UploadCloud className="h-16 w-16 text-gray-400 mb-4" />
-                <p className="text-lg">Upload PDF versions of your purchase order and sales order.</p>
+                <p className="text-lg">Upload document versions (PDF, Image, CSV, Excel) of your purchase order and sales order.</p>
                 <p className="text-sm">The AI will analyze their content to find discrepancies.</p>
               </div>
             )}
@@ -253,3 +279,5 @@ export default function OrderComparatorPage() {
     </div>
   );
 }
+
+    

@@ -8,10 +8,47 @@ interface CompareOrdersResult {
   error?: string;
 }
 
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'text/csv',
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' // .xlsx
+];
+
+// Helper function to validate file types more robustly, considering .csv, .xls, .xlsx extensions
+// as their MIME types can sometimes be generic (e.g., application/octet-stream).
+function isValidFileType(file: File): boolean {
+  if (ALLOWED_MIME_TYPES.includes(file.type)) {
+    return true;
+  }
+  const fileName = file.name.toLowerCase();
+  if (fileName.endsWith('.csv') || fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
+    return true;
+  }
+  return false;
+}
+
+
 async function fileToDataUri(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');
-  return `data:${file.type};base64,${base64}`;
+  // Ensure the MIME type used in the data URI is one that the AI model can likely handle or is standard.
+  // For CSV/Excel, text/plain or application/octet-stream might be what's passed if original type isn't specific.
+  // The model will rely on prompt instructions for these.
+  let mimeType = file.type;
+  if ((file.name.toLowerCase().endsWith('.csv') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.csv')) {
+    mimeType = 'text/csv';
+  } else if ((file.name.toLowerCase().endsWith('.xls') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xls')) {
+    mimeType = 'application/vnd.ms-excel';
+  } else if ((file.name.toLowerCase().endsWith('.xlsx') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xlsx')) {
+    mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
+
+
+  return `data:${mimeType || 'application/octet-stream'};base64,${base64}`;
 }
 
 export async function compareOrdersAction(formData: FormData): Promise<CompareOrdersResult> {
@@ -19,11 +56,20 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
   const salesOrderFile = formData.get('salesOrder') as File | null;
 
   if (!purchaseOrderFile || !salesOrderFile) {
-    return { error: 'Both purchase order and sales order PDF files are required.' };
+    return { error: 'Both purchase order and sales order documents are required.' };
   }
 
-  if (purchaseOrderFile.type !== 'application/pdf' || salesOrderFile.type !== 'application/pdf') {
-    return { error: 'Invalid file type. Please upload PDF files only.' };
+  if (!isValidFileType(purchaseOrderFile) || !isValidFileType(salesOrderFile)) {
+    let poType = purchaseOrderFile.type || 'unknown type';
+    if (!ALLOWED_MIME_TYPES.includes(poType) && (purchaseOrderFile.name.endsWith('.csv') || purchaseOrderFile.name.endsWith('.xls') || purchaseOrderFile.name.endsWith('.xlsx'))) {
+        poType = `file with extension ${purchaseOrderFile.name.split('.').pop()}`;
+    }
+    let soType = salesOrderFile.type || 'unknown type';
+    if (!ALLOWED_MIME_TYPES.includes(soType) && (salesOrderFile.name.endsWith('.csv') || salesOrderFile.name.endsWith('.xls') || salesOrderFile.name.endsWith('.xlsx'))) {
+        soType = `file with extension ${salesOrderFile.name.split('.').pop()}`;
+    }
+
+    return { error: `Invalid file type. Please upload supported document types (PDF, Image, CSV, Excel). PO: ${poType}, SO: ${soType}` };
   }
 
   try {
@@ -39,9 +85,12 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     console.error('Error comparing orders:', e);
     const errorMessage = e instanceof Error ? e.message : String(e) || 'An unexpected error occurred during comparison.';
     
-    if (errorMessage.includes('CLIENT_ERROR') || errorMessage.includes('format') || errorMessage.includes('mime type')) {
-         return { error: `Failed to process PDF: The AI model could not read the provided PDF. Please ensure it is a valid and text-extractable PDF. Details: ${errorMessage}` };
+    // Generalize error for document processing
+    if (errorMessage.includes('CLIENT_ERROR') || errorMessage.toLowerCase().includes('unsupported mime type') || errorMessage.toLowerCase().includes('failed to parse content') || errorMessage.toLowerCase().includes('format')) {
+         return { error: `Failed to process document: The AI model could not read or interpret one or both of the provided files. Please ensure they are valid and well-formatted (PDF, Image, CSV, Excel). Details: ${errorMessage}` };
     }
     return { error: `Failed to compare orders: ${errorMessage}` };
   }
 }
+
+    
