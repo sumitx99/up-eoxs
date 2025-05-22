@@ -27,16 +27,19 @@ const DiscrepancySchema = z.object({
   salesOrderValue: z.string().describe('The value from the sales order document.'),
   reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch.'),
 });
+export type Discrepancy = z.infer<typeof DiscrepancySchema>;
+
 
 const MatchedItemSchema = z.object({
   field: z.string().describe('The field that matches (e.g., PO Number, Buyer Name, Product SKU).'),
   value: z.string().describe('The common value found in both the purchase order and sales order documents.'),
   matchQuality: z.enum(['exact', 'normalized', 'inferred']).optional().describe('The quality of the match (e.g., exact string match, match after normalization, or inferred match based on context). Default to "exact" if not specified.'),
 });
+export type MatchedItem = z.infer<typeof MatchedItemSchema>;
 
 const CompareOrderDetailsOutputSchema = z.object({
-  discrepancies: z.array(DiscrepancySchema).describe('An array of discrepancies found between the purchase order and sales order documents.'),
-  matchedItems: z.array(MatchedItemSchema).describe('An array of items/fields that match between the purchase order and sales order documents.'),
+  discrepancies: z.array(DiscrepancySchema).describe('An array of discrepancies found between the purchase order and sales order documents. This should always be an array, even if empty.'),
+  matchedItems: z.array(MatchedItemSchema).describe('An array of items/fields that match between the purchase order and sales order documents. This should always be an array, even if empty. Strive to find matches for common header fields.'),
   summary: z.string().describe('A summary of the comparison, highlighting key discrepancies and confirmed matches found in the document contents.'),
 });
 
@@ -126,25 +129,33 @@ const compareOrderDetailsFlow = ai.defineFlow(
       const {output} = await compareOrderDetailsPrompt(input);
       if (!output) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output.');
-        throw new Error('AI model failed to return valid comparison data.');
+        // Return a default structure in case of completely null output from AI, though Zod should catch this.
+        return {
+            summary: 'AI model failed to return valid comparison data. Please check the documents or try again.',
+            matchedItems: [],
+            discrepancies: [],
+        };
       }
       // Ensure matchedItems and discrepancies are always arrays, even if the model doesn't return them or returns them as null
-      if (!Array.isArray(output.matchedItems)) {
-        output.matchedItems = [];
-      }
-      if (!Array.isArray(output.discrepancies)) {
-        output.discrepancies = [];
-      }
+      // Zod schema with .array() should handle this, but this is an extra safeguard.
+      output.matchedItems = Array.isArray(output.matchedItems) ? output.matchedItems : [];
+      output.discrepancies = Array.isArray(output.discrepancies) ? output.discrepancies : [];
+      
       return output;
     } catch (error) {
       console.error("Error in compareOrderDetailsFlow: ", error);
-      if (error instanceof Error && (error.message.includes('CLIENT_ERROR') || error.message.toLowerCase().includes('unsupported mime type') || error.message.toLowerCase().includes('failed to parse content from bytes') || error.message.toLowerCase().includes('format error'))) {
-        throw new Error(`The AI model could not process one or both of the documents. Please ensure they are valid and well-formatted (PDF, Image, CSV, Excel) and try again. Details: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('CLIENT_ERROR') || errorMessage.toLowerCase().includes('unsupported mime type') || errorMessage.toLowerCase().includes('failed to parse content from bytes') || errorMessage.toLowerCase().includes('format error') || errorMessage.toLowerCase().includes('consumer_suspended')) {
+        // For client-side display, rethrow with a user-friendly message.
+        // The specific CONSUMER_SUSPENDED error should ideally be caught by the global error handler or UI.
+        throw new Error(`The AI model could not process one or both of the documents. Please ensure they are valid and well-formatted (PDF, Image, CSV, Excel) and try again. Details: ${errorMessage}`);
       }
-      throw error;
+      // For other errors, provide a generic fallback.
+       return {
+            summary: `An unexpected error occurred during AI processing: ${errorMessage}. Please try again.`,
+            matchedItems: [],
+            discrepancies: [],
+        };
     }
   }
 );
-
-
-    
