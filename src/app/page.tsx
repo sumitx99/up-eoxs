@@ -226,11 +226,11 @@ export default function OrderComparatorPage() {
                   </p>
                 </div>
 
-                {comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0 && (
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
-                      <CheckCircle2 className="mr-2 h-6 w-6 text-accent" /> Matched Items
-                    </h3>
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                    <CheckCircle2 className="mr-2 h-6 w-6 text-accent" /> Matched Items
+                  </h3>
+                  {comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0 ? (
                     <div className="border rounded-md overflow-hidden max-h-80 overflow-y-auto">
                       <Table>
                         <TableHeader className="bg-muted/30 sticky top-0">
@@ -251,14 +251,22 @@ export default function OrderComparatorPage() {
                         </TableBody>
                       </Table>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground/90">
+                      <FileCheck2 className="h-5 w-5 text-accent" />
+                      <AlertTitle>No Matched Items Identified</AlertTitle>
+                      <AlertDescription>
+                        The AI did not identify any specific matching items between the documents.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
                 
-                {comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0 && (
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
-                      <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> Discrepancies
-                    </h3>
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                    <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> Discrepancies
+                  </h3>
+                  {comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0 ? (
                     <div className="border rounded-md overflow-hidden max-h-80 overflow-y-auto">
                       <Table>
                         <TableHeader className="bg-muted/30 sticky top-0">
@@ -281,19 +289,16 @@ export default function OrderComparatorPage() {
                         </TableBody>
                       </Table>
                     </div>
-                  </div>
-                )}
-
-                {(!comparisonResult.matchedItems || comparisonResult.matchedItems.length === 0) && 
-                 (!comparisonResult.discrepancies || comparisonResult.discrepancies.length === 0) && (
-                     <Alert variant="default" className="bg-accent/20 border-accent/50">
-                       <FileCheck2 className="h-5 w-5 text-accent-foreground" />
-                       <AlertTitle className="text-accent-foreground">No Specific Differences or Matches Identified</AlertTitle>
-                       <AlertDescription className="text-accent-foreground/80">
-                         The AI could not identify specific itemized matches or discrepancies based on the provided documents, or the documents were identical in all comparable fields. Please check the summary for overall findings.
+                  ) : (
+                     <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground/90">
+                       <CheckCircle2 className="h-5 w-5 text-accent" />
+                       <AlertTitle>No Discrepancies Found</AlertTitle>
+                       <AlertDescription>
+                         The AI did not identify any discrepancies between the documents. All comparable fields appear to match.
                        </AlertDescription>
                      </Alert>
-                )}
+                  )}
+                </div>
               </div>
             )}
             {!isLoading && !error && !comparisonResult && (
