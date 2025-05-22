@@ -134,7 +134,7 @@ export default function OrderComparatorPage() {
 
     (comparisonResult.matchedItems || []).forEach((item, index) => {
       items.push({
-        id: `match-${index}-${item.field}`,
+        id: `match-${index}-${item.field.replace(/\s+/g, '-')}`, // Ensure ID is valid
         field: item.field,
         poValue: item.value,
         soValue: item.value,
@@ -146,7 +146,7 @@ export default function OrderComparatorPage() {
 
     (comparisonResult.discrepancies || []).forEach((d, index) => {
       items.push({
-        id: `disc-${index}-${d.field}`,
+        id: `disc-${index}-${d.field.replace(/\s+/g, '-')}`, // Ensure ID is valid
         field: d.field,
         poValue: d.purchaseOrderValue,
         soValue: d.salesOrderValue,
@@ -202,8 +202,8 @@ export default function OrderComparatorPage() {
               <TableRow 
                 key={item.id} 
                 className={`${item.isMatched ? 'hover:bg-accent/10' : 'hover:bg-destructive/10'} 
-                           ${item.isMatched && item.id.includes('match') ? (parseInt(item.id.split('-')[1]) % 2 === 0 ? 'bg-transparent' : 'bg-accent/5') : ''}
-                           ${!item.isMatched && item.id.includes('disc') ? (parseInt(item.id.split('-')[1]) % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5') : ''}
+                           ${item.isMatched && item.id.startsWith('match-') ? (parseInt(item.id.split('-')[1]) % 2 === 0 ? 'bg-transparent' : 'bg-accent/5') : ''}
+                           ${!item.isMatched && item.id.startsWith('disc-') ? (parseInt(item.id.split('-')[1]) % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5') : ''}
                           `}
               >
                 <TableCell className="font-medium py-3 px-4">{item.field}</TableCell>
