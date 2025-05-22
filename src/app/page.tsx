@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Scale, FileWarning, FileCheck2, UploadCloud, FileText, FileImage, FileSpreadsheet } from 'lucide-react';
+import { Loader2, Scale, FileWarning, FileCheck2, UploadCloud, FileText, FileImage, FileSpreadsheet, CheckCircle2, AlertCircle, BadgeHelp } from 'lucide-react';
 import { compareOrdersAction } from './actions';
 import type { CompareOrderDetailsOutput } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
@@ -39,9 +39,9 @@ export default function OrderComparatorPage() {
 
   const getFileIcon = (file: File | null) => {
     if (!file) return <UploadCloud className="h-4 w-4 mr-2 text-muted-foreground" />;
-    if (file.type.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-blue-500" />;
-    if (file.type === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-red-500" />;
-    if (file.type === "text/csv" || file.name.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-500" />;
+    if (file.type.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-primary" />;
+    if (file.type === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-destructive" />;
+    if (file.type === "text/csv" || file.name.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />;
     if (file.type.includes("excel") || file.type.includes("spreadsheetml") || file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700" />;
     return <FileText className="h-4 w-4 mr-2 text-gray-500" />;
   };
@@ -50,14 +50,16 @@ export default function OrderComparatorPage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, setFile: React.Dispatch<React.SetStateAction<File | null>>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (ALLOWED_FILE_TYPES.includes(file.type) || file.name.endsWith('.csv') || file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      const isValidExtension = fileExtension && ['csv', 'xls', 'xlsx'].includes(fileExtension);
+      if (ALLOWED_FILE_TYPES.includes(file.type) || isValidExtension) {
         setFile(file);
         setError(null); // Clear previous errors
       } else {
         toast({
           variant: "destructive",
           title: "Invalid File Type",
-          description: `Please upload a supported file type: PDF, Image (JPEG, PNG, WebP), CSV, Excel (.xls, .xlsx). You provided: ${file.type || 'unknown'}.`,
+          description: `Please upload a supported file type: PDF, Image (JPEG, PNG, WebP), CSV, Excel (.xls, .xlsx). You provided: ${file.type || `.${fileExtension}` || 'unknown'}.`,
         });
         setFile(null);
         if (event.target) {
@@ -195,7 +197,7 @@ export default function OrderComparatorPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Comparison Report</CardTitle>
             <CardDescription>
-              Review the comparison summary and detailed discrepancies from the documents.
+              Review the comparison summary, matched items, and detailed discrepancies.
             </CardDescription>
           </CardHeader>
           <CardContent className="min-h-[300px] flex flex-col justify-center">
@@ -216,17 +218,50 @@ export default function OrderComparatorPage() {
             {comparisonResult && !isLoading && !error && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-xl font-semibold mb-2 text-foreground">Summary</h3>
+                  <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                     <BadgeHelp className="mr-2 h-6 w-6 text-primary" /> Summary
+                  </h3>
                   <p className="text-sm text-muted-foreground bg-secondary p-3 rounded-md whitespace-pre-wrap">
                     {comparisonResult.summary || 'No summary provided.'}
                   </p>
                 </div>
-                <div>
-                  <h3 className="text-xl font-semibold mb-2 text-foreground">Discrepancies</h3>
-                  {comparisonResult.discrepancies.length > 0 ? (
-                    <div className="border rounded-md overflow-hidden max-h-96 overflow-y-auto">
+
+                {comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                      <CheckCircle2 className="mr-2 h-6 w-6 text-accent" /> Matched Items
+                    </h3>
+                    <div className="border rounded-md overflow-hidden max-h-80 overflow-y-auto">
                       <Table>
-                        <TableHeader className="bg-muted/50 sticky top-0">
+                        <TableHeader className="bg-muted/30 sticky top-0">
+                          <TableRow>
+                            <TableHead className="font-semibold">Field</TableHead>
+                            <TableHead className="font-semibold">Matched Value</TableHead>
+                            <TableHead className="font-semibold">Match Quality</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {comparisonResult.matchedItems.map((item, index) => (
+                            <TableRow key={`match-${index}`} className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5'} hover:bg-accent/10`}>
+                              <TableCell className="font-medium">{item.field}</TableCell>
+                              <TableCell>{item.value}</TableCell>
+                              <TableCell className="capitalize">{item.matchQuality || 'Exact'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+                
+                {comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                      <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> Discrepancies
+                    </h3>
+                    <div className="border rounded-md overflow-hidden max-h-80 overflow-y-auto">
+                      <Table>
+                        <TableHeader className="bg-muted/30 sticky top-0">
                           <TableRow>
                             <TableHead className="font-semibold">Field</TableHead>
                             <TableHead className="font-semibold">Purchase Order Value</TableHead>
@@ -236,7 +271,7 @@ export default function OrderComparatorPage() {
                         </TableHeader>
                         <TableBody>
                           {comparisonResult.discrepancies.map((d, index) => (
-                            <TableRow key={index} className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5'} hover:bg-destructive/10`}>
+                            <TableRow key={`disc-${index}`} className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5'} hover:bg-destructive/10`}>
                               <TableCell className="font-medium">{d.field}</TableCell>
                               <TableCell>{d.purchaseOrderValue}</TableCell>
                               <TableCell>{d.salesOrderValue}</TableCell>
@@ -246,23 +281,26 @@ export default function OrderComparatorPage() {
                         </TableBody>
                       </Table>
                     </div>
-                  ) : (
+                  </div>
+                )}
+
+                {(!comparisonResult.matchedItems || comparisonResult.matchedItems.length === 0) && 
+                 (!comparisonResult.discrepancies || comparisonResult.discrepancies.length === 0) && (
                      <Alert variant="default" className="bg-accent/20 border-accent/50">
                        <FileCheck2 className="h-5 w-5 text-accent-foreground" />
-                       <AlertTitle className="text-accent-foreground">No Discrepancies Found</AlertTitle>
+                       <AlertTitle className="text-accent-foreground">No Specific Differences or Matches Identified</AlertTitle>
                        <AlertDescription className="text-accent-foreground/80">
-                         The AI found no discrepancies between the provided documents.
+                         The AI could not identify specific itemized matches or discrepancies based on the provided documents, or the documents were identical in all comparable fields. Please check the summary for overall findings.
                        </AlertDescription>
                      </Alert>
-                  )}
-                </div>
+                )}
               </div>
             )}
             {!isLoading && !error && !comparisonResult && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center">
                 <UploadCloud className="h-16 w-16 text-gray-400 mb-4" />
                 <p className="text-lg">Upload document versions (PDF, Image, CSV, Excel) of your purchase order and sales order.</p>
-                <p className="text-sm">The AI will analyze their content to find discrepancies.</p>
+                <p className="text-sm">The AI will analyze their content to find discrepancies and matching details.</p>
               </div>
             )}
           </CardContent>
@@ -279,5 +317,3 @@ export default function OrderComparatorPage() {
     </div>
   );
 }
-
-    

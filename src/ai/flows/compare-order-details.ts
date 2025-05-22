@@ -4,8 +4,9 @@
 
 /**
  * @fileOverview Compares product names, quantities, discounts, and taxes between a purchase order and a sales order document (PDF, image, CSV, or Excel) using AI.
+ * Identifies both discrepancies and matching items.
  *
- * - compareOrderDetails - Compares order details from document content and identifies discrepancies.
+ * - compareOrderDetails - Compares order details from document content and identifies discrepancies and matches.
  * - CompareOrderDetailsInput - The input type for the compareOrderDetails function, expecting documents as data URIs.
  * - CompareOrderDetailsOutput - The output type for the compareOrderDetails function.
  */
@@ -26,9 +27,16 @@ const DiscrepancySchema = z.object({
   reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch.'),
 });
 
+const MatchedItemSchema = z.object({
+  field: z.string().describe('The field that matches (e.g., PO Number, Buyer Name, Product SKU).'),
+  value: z.string().describe('The common value found in both the purchase order and sales order documents.'),
+  matchQuality: z.enum(['exact', 'normalized', 'inferred']).optional().describe('The quality of the match (e.g., exact string match, match after normalization, or inferred match based on context). Default to "exact" if not specified.'),
+});
+
 const CompareOrderDetailsOutputSchema = z.object({
   discrepancies: z.array(DiscrepancySchema).describe('An array of discrepancies found between the purchase order and sales order documents.'),
-  summary: z.string().describe('A summary of the comparison, highlighting key discrepancies found in the document contents.'),
+  matchedItems: z.array(MatchedItemSchema).describe('An array of items/fields that match between the purchase order and sales order documents.'),
+  summary: z.string().describe('A summary of the comparison, highlighting key discrepancies and confirmed matches found in the document contents.'),
 });
 
 export type CompareOrderDetailsOutput = z.infer<typeof CompareOrderDetailsOutputSchema>;
@@ -46,11 +54,11 @@ const compareOrderDetailsPrompt = ai.definePrompt({
     schema: CompareOrderDetailsOutputSchema,
   },
   prompt: `You are an AI assistant specializing in comparing purchase orders (POs) and sales orders (SOs) provided as various document types.
-Your task is to meticulously analyze the content of both documents and identify discrepancies in product names (including item codes or SKUs if present), quantities, unit prices, total prices, discounts (line item and overall), taxes (line item and overall), shipping costs, and any other relevant financial or item-specific details.
+Your task is to meticulously analyze the content of both documents and identify discrepancies AND matching items in product names (including item codes or SKUs if present), quantities, unit prices, total prices, discounts (line item and overall), taxes (line item and overall), shipping costs, PO Number, Buyer, Vendor, Payment Terms, Freight Terms, Total Amount, and any other relevant financial or item-specific details.
 
 The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) format.
 - If the document is an image, perform OCR to extract textual content.
-- If the document is a CSV or Excel file, parse the tabular data to identify order details. Look for headers like 'Product', 'Item', 'Quantity', 'Price', 'Amount', 'Discount', 'Tax', etc.
+- If the document is a CSV or Excel file, parse the tabular data to identify order details. Look for headers like 'Product', 'Item', 'Quantity', 'Price', 'Amount', 'Discount', 'Tax', 'PO Number', 'Buyer', 'Vendor', 'Payment Terms', etc.
 - If the document is a PDF, extract its textual content.
 
 Analyze the content of the following Purchase Order document and Sales Order document:
@@ -61,15 +69,24 @@ Purchase Order Document:
 Sales Order Document:
 {{media url=salesOrder}}
 
-Based on your analysis of the document contents, identify all discrepancies. For each discrepancy, specify:
-1.  'field': The specific field or item that has a discrepancy (e.g., "Product 'ABC' Quantity", "Overall Discount", "Tax Rate for Item 'XYZ'", "Shipping Cost").
-2.  'purchaseOrderValue': The value of this field as found in the Purchase Order document. If the field is not found, state "Not specified" or "N/A".
-3.  'salesOrderValue': The value of this field as found in the Sales Order document. If the field is not found, state "Not specified" or "N/A".
-4.  'reason': A brief explanation of the discrepancy (e.g., "Quantity differs", "Discount applied in PO but not in SO", "Unit price mismatch", "Item listed in PO but not in SO").
+Based on your analysis of the document contents:
 
-Provide a concise 'summary' of the comparison, highlighting the most significant discrepancies or confirming if the orders largely match. If no discrepancies are found, the summary should state that, and the discrepancies array should be empty.
+1.  Identify all **discrepancies**. For each discrepancy, populate the 'discrepancies' array with objects specifying:
+    *   'field': The specific field or item that has a discrepancy (e.g., "Product 'ABC' Quantity", "Overall Discount", "Payment Terms").
+    *   'purchaseOrderValue': The value of this field as found in the Purchase Order document. If the field is not found, state "Not specified" or "N/A".
+    *   'salesOrderValue': The value of this field as found in the Sales Order document. If the field is not found, state "Not specified" or "N/A".
+    *   'reason': A brief explanation of the discrepancy (e.g., "Quantity differs", "Discount applied in PO but not in SO", "Unit price mismatch", "Item listed in PO but not in SO", "Payment terms do not match").
+
+2.  Identify all **matching items/fields**. These are details that are consistent or equivalent across both documents. For each matched item, populate the 'matchedItems' array with objects specifying:
+    *   'field': The name of the field that matches (e.g., "PO Number", "Buyer Name", "Product 'XYZ' Unit Price", "Vendor").
+    *   'value': The common value found in both documents for that field.
+    *   'matchQuality': (Optional) Describe the quality of the match. Use 'exact' if the values are identical. Use 'normalized' if they match after minor adjustments like case changes or removing extra spaces. Use 'inferred' if the match is clear from context despite slight wording differences. Default to 'exact' if not specified.
+
+Provide a concise 'summary' of the comparison in the 'summary' field. This summary should highlight the most significant discrepancies and also mention key confirmed matches. If no discrepancies are found, the summary should state that, and the 'discrepancies' array should be empty. If no specific matches are identified beyond what's covered in discrepancies (which is unlikely for most fields like PO number if they match), the 'matchedItems' array can be empty, but strive to find matches for common header fields if they exist and are consistent.
+
 Be thorough and accurate. If the document content is unreadable, ambiguous, or crucial sections are missing, note this limitation in your summary.
 If dealing with CSV/Excel, clearly state if the structure made it difficult to extract specific fields.
+Ensure all fields in the output schema (discrepancies, matchedItems, summary) are populated according to your findings.
 `,
   config: {
     safetySettings: [
@@ -106,6 +123,13 @@ const compareOrderDetailsFlow = ai.defineFlow(
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output.');
         throw new Error('AI model failed to return valid comparison data.');
       }
+      // Ensure matchedItems is always an array, even if the model doesn't return it
+      if (!output.matchedItems) {
+        output.matchedItems = [];
+      }
+      if (!output.discrepancies) {
+        output.discrepancies = [];
+      }
       return output;
     } catch (error) {
       console.error("Error in compareOrderDetailsFlow: ", error);
@@ -116,5 +140,3 @@ const compareOrderDetailsFlow = ai.defineFlow(
     }
   }
 );
-
-    
