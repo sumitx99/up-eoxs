@@ -146,7 +146,7 @@ export default function OrderComparatorPage() {
                         accept={ACCEPTED_EXTENSIONS_STRING}
                         ref={purchaseOrderRef}
                         onChange={(e) => handleFileChange(e, setPurchaseOrderFile)}
-                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                         required
                         disabled={isLoading}
                       />
@@ -166,7 +166,7 @@ export default function OrderComparatorPage() {
                         accept={ACCEPTED_EXTENSIONS_STRING}
                         ref={salesOrderRef}
                         onChange={(e) => handleFileChange(e, setSalesOrderFile)}
-                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                         required
                         disabled={isLoading}
                       />
@@ -336,3 +336,4 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
+
