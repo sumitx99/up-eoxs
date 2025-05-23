@@ -139,18 +139,18 @@ export default function OrderComparatorPage() {
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
-                  <div className="flex items-center space-x-2">
+                  
                       <Input
                         id="purchaseOrder"
                         type="file"
                         accept={ACCEPTED_EXTENSIONS_STRING}
                         ref={purchaseOrderRef}
                         onChange={(e) => handleFileChange(e, setPurchaseOrderFile)}
-                        className="focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
                         required
                         disabled={isLoading}
                       />
-                  </div>
+                  
                   {purchaseOrderFile && (
                     <p className="text-sm text-muted-foreground flex items-center mt-2">
                       {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
@@ -159,18 +159,18 @@ export default function OrderComparatorPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="salesOrder" className="text-lg font-medium">Sales Order Document</Label>
-                  <div className="flex items-center space-x-2">
+                  
                       <Input
                         id="salesOrder"
                         type="file"
                         accept={ACCEPTED_EXTENSIONS_STRING}
                         ref={salesOrderRef}
                         onChange={(e) => handleFileChange(e, setSalesOrderFile)}
-                        className="focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
                         required
                         disabled={isLoading}
                       />
-                  </div>
+                  
                   {salesOrderFile && (
                     <p className="text-sm text-muted-foreground flex items-center mt-2">
                       {getFileIcon(salesOrderFile)} Selected: {salesOrderFile.name} ({Math.round(salesOrderFile.size / 1024)} KB)
@@ -203,7 +203,7 @@ export default function OrderComparatorPage() {
                 Review the comparison summary, matched items, and detailed discrepancies.
               </CardDescription>
             </CardHeader>
-            <CardContent className="min-h-[300px] flex flex-col">
+            <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col"> {/* Added ID here */}
               {isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -260,8 +260,8 @@ export default function OrderComparatorPage() {
                     ) : (
                       <Alert variant="default" className="mt-2">
                         <Info className="h-5 w-5" />
-                        <AlertTitle>No Matched Items</AlertTitle>
-                        <AlertDescription>No matching items were identified between the documents.</AlertDescription>
+                        <AlertTitle>No Matched Items Identified</AlertTitle>
+                        <AlertDescription>The AI did not find any items that match between the two documents.</AlertDescription>
                       </Alert>
                     )}
                   </div>
@@ -308,7 +308,7 @@ export default function OrderComparatorPage() {
                        <Alert variant="default" className="mt-2">
                         <Info className="h-5 w-5" />
                         <AlertTitle>No Discrepancies Found</AlertTitle>
-                        <AlertDescription>No discrepancies were identified between the documents.</AlertDescription>
+                        <AlertDescription>The AI did not find any discrepancies between the two documents.</AlertDescription>
                       </Alert>
                     )}
                   </div>
@@ -324,7 +324,7 @@ export default function OrderComparatorPage() {
             </CardContent>
             {comparisonResult && !isLoading && !error && (
               <CardFooter>
-                <ExportButton data={comparisonResult} className="w-full text-lg py-3" />
+                <ExportButton data={comparisonResult} reportId="reportContentArea" className="w-full text-lg py-3" />
               </CardFooter>
             )}
           </Card>
@@ -336,8 +336,3 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
-    
-
-    
-
-    
