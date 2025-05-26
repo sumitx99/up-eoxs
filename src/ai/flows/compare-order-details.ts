@@ -96,9 +96,10 @@ Based on your analysis of the document contents, provide the following:
 
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
    - Identify general discrepancies (non-product line items OR unmatched products from line item analysis).
-     - For discrepancies in general fields (e.g., 'PO Number', 'Overall Discount'), populate the 'discrepancies' array with objects specifying: 'field', 'purchaseOrderValue', 'salesOrderValue', 'reason'.
+     - For discrepancies in general fields (e.g., 'PO Number', 'Overall Discount', 'Payment Terms'), populate the 'discrepancies' array with objects specifying: 'field', 'purchaseOrderValue', 'salesOrderValue', 'reason'.
      - For product line items found in the PO but not in the SO (determined during your detailed product line item analysis step below), add a discrepancy: 'field': "Unmatched PO Product: [Product Name/SKU from PO]", 'purchaseOrderValue': "[Details from PO line item]", 'salesOrderValue': "Not found in SO", 'reason': "Product listed in Purchase Order only."
      - For product line items found in the SO but not in the PO (determined during your detailed product line item analysis step below), add a discrepancy: 'field': "Unmatched SO Product: [Product Name/SKU from SO]", 'purchaseOrderValue': "Not found in PO", 'salesOrderValue': "[Details from SO line item]", 'reason': "Product listed in Sales Order only."
+     - **Crucially, ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' during the detailed product line item analysis (section 2) results in a corresponding entry in this 'discrepancies' array (section 1).**
    - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields.
 
 **2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
