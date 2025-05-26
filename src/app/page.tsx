@@ -141,7 +141,7 @@ export default function OrderComparatorPage() {
         <header className="mb-8 text-center">
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
-            <h1 className="text-4xl font-bold text-foreground">Order Comparator</h1>
+            <h1 className="text-4xl font-bold text-foreground">AI Comparator</h1>
           </div>
           <p className="text-muted-foreground text-lg">
             AI-powered tool to compare purchase and sales orders from various document types.
@@ -431,7 +431,7 @@ export default function OrderComparatorPage() {
           </Card>
         </div>
         <footer className="mt-12 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Order Comparator. Powered by AI.</p>
+          <p>&copy; {new Date().getFullYear()} AI Comparator. Powered by AI.</p>
         </footer>
       </div>
     </TooltipProvider>
