@@ -136,7 +136,7 @@ export default function OrderComparatorPage() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen flex flex-col items-center p-4 md:p-8 bg-background">
+      <div className="min-h-screen p-4 md:p-8 bg-background">
         <header className="mb-8 text-center">
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
@@ -248,7 +248,6 @@ export default function OrderComparatorPage() {
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
                       <FileKey2 className="mr-2 h-6 w-6 text-blue-600" /> General Matched Fields
-                       {comparisonResult.matchedItems && ` (${comparisonResult.matchedItems.length})`}
                     </h3>
                     {(comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0) ? (
                       <div className="border rounded-md overflow-hidden max-h-[200px] overflow-y-auto">
@@ -285,7 +284,6 @@ export default function OrderComparatorPage() {
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
                       <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> General Discrepancies
-                       {comparisonResult.discrepancies && ` (${comparisonResult.discrepancies.length})`}
                     </h3>
                     {(comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0) ? (
                        <div className="border rounded-md overflow-hidden max-h-[200px] overflow-y-auto">
@@ -332,7 +330,6 @@ export default function OrderComparatorPage() {
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
                       <PackageSearch className="mr-2 h-6 w-6 text-purple-600" /> Product Line Item Comparison
-                       {comparisonResult.productLineItemComparisons && ` (${comparisonResult.productLineItemComparisons.length})`}
                     </h3>
                     {(comparisonResult.productLineItemComparisons && comparisonResult.productLineItemComparisons.length > 0) ? (
                       <div className="border rounded-md overflow-hidden max-h-[400px] overflow-y-auto">
@@ -409,3 +406,6 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
+
+
+    
