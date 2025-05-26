@@ -97,9 +97,9 @@ Based on your analysis of the document contents, provide the following:
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
    - Identify general discrepancies (non-product line items OR unmatched products from line item analysis).
      - For discrepancies in general fields (e.g., "PO Number", "Overall Discount"), populate the 'discrepancies' array with objects specifying: 'field', 'purchaseOrderValue', 'salesOrderValue', 'reason'.
-     - For product line items found in the PO but not in the SO, add a discrepancy: 'field': "Unmatched PO Product: [Product Name/SKU from PO]", 'purchaseOrderValue': "[Details from PO line item]", 'salesOrderValue': "Not found in SO", 'reason': "Product listed in Purchase Order only."
-     - For product line items found in the SO but not in the PO, add a discrepancy: 'field': "Unmatched SO Product: [Product Name/SKU from SO]", 'purchaseOrderValue': "Not found in PO", 'salesOrderValue': "[Details from SO line item]", 'reason': "Product listed in Sales Order only."
-   - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'.
+     - For product line items found in the PO but not in the SO (determined during your detailed product line item analysis step below), add a discrepancy: 'field': "Unmatched PO Product: [Product Name/SKU from PO]", 'purchaseOrderValue': "[Details from PO line item]", 'salesOrderValue': "Not found in SO", 'reason': "Product listed in Purchase Order only."
+     - For product line items found in the SO but not in the PO (determined during your detailed product line item analysis step below), add a discrepancy: 'field': "Unmatched SO Product: [Product Name/SKU from SO]", 'purchaseOrderValue': "Not found in PO", 'salesOrderValue': "[Details from SO line item]", 'reason': "Product listed in Sales Order only."
+   - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields.
 
 **2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
    - Perform a detailed comparison of product line items. For each product line item found in the PO, try to find its corresponding item in the SO (and vice-versa). Strive to find the best possible match for product descriptions, even if there are minor wording differences, acronyms, or variations in item codes/SKUs. Focus on semantic similarity where appropriate.
@@ -163,14 +163,10 @@ const compareOrderDetailsFlow = ai.defineFlow(
       const {output} = await compareOrderDetailsPrompt(input);
       if (!output) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output.');
-        return {
-            summary: 'AI model failed to return valid comparison data. Please check the documents or try again.',
-            matchedItems: [],
-            discrepancies: [],
-            productLineItemComparisons: [],
-        };
+        // Throw an error so it's caught by the action and displayed prominently
+        throw new Error('AI model failed to return valid comparison data. Please check the documents or try again.');
       }
-      // Ensure arrays are always present
+      // Ensure arrays are always present (though Zod schema should enforce this, this is a defensive measure)
       output.matchedItems = Array.isArray(output.matchedItems) ? output.matchedItems : [];
       output.discrepancies = Array.isArray(output.discrepancies) ? output.discrepancies : [];
       output.productLineItemComparisons = Array.isArray(output.productLineItemComparisons) ? output.productLineItemComparisons : [];
@@ -179,18 +175,20 @@ const compareOrderDetailsFlow = ai.defineFlow(
     } catch (error) {
       console.error("Error in compareOrderDetailsFlow: ", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('CLIENT_ERROR') || errorMessage.toLowerCase().includes('unsupported mime type') || errorMessage.toLowerCase().includes('failed to parse content from bytes') || errorMessage.toLowerCase().includes('format error') || errorMessage.toLowerCase().includes('consumer_suspended')) {
-        throw new Error(`The AI model could not process one or both of the documents. Please ensure they are valid and well-formatted (PDF, Image, CSV, Excel) and try again. Details: ${errorMessage}`);
+      
+      // Check for specific error messages that indicate document processing issues or API key problems
+      if (errorMessage.includes('CLIENT_ERROR') || 
+          errorMessage.toLowerCase().includes('unsupported mime type') || 
+          errorMessage.toLowerCase().includes('failed to parse content') || // General parsing
+          errorMessage.toLowerCase().includes('failed to parse content from bytes') || // Specific parsing
+          errorMessage.toLowerCase().includes('format error') ||
+          errorMessage.toLowerCase().includes('consumer_suspended') || // API key issue
+          errorMessage.toLowerCase().includes('permission denied')) { // API key/permission issue
+        // Re-throw these critical errors to be caught by the calling action and displayed accurately
+        throw new Error(`The AI model could not process one or both of the documents or there's an issue with API access. Please ensure documents are valid and API key permissions are correct. Details: ${errorMessage}`);
       }
-       return {
-            summary: `An unexpected error occurred during AI processing: ${errorMessage}. Please try again.`,
-            matchedItems: [],
-            discrepancies: [],
-            productLineItemComparisons: [],
-        };
+      // For other unexpected errors during AI processing, also throw an error
+      throw new Error(`An unexpected error occurred during AI processing: ${errorMessage}. Please try again.`);
     }
   }
 );
-
-
-    
