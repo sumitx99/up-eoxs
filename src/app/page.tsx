@@ -153,7 +153,6 @@ export default function OrderComparatorPage() {
           <Accordion type="single" collapsible className="w-full shadow-lg rounded-lg bg-card" defaultValue="input-documents">
             <AccordionItem value="input-documents" className="border-b-0">
               <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
-                {/* Content for the trigger, AccordionTrigger will add its own chevron */}
                 <div>
                   <h2 className="text-2xl font-semibold flex items-center">
                     <UploadCloud className="mr-3 h-7 w-7 text-primary" />
@@ -165,7 +164,7 @@ export default function OrderComparatorPage() {
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-0">
-                <Card className="shadow-none border-0 rounded-t-none"> {/* Keep Card for consistent form styling minus header */}
+                <Card className="shadow-none border-0 rounded-t-none">
                   <form onSubmit={handleSubmit}>
                     <CardContent className="space-y-6 pt-6">
                       <div className="space-y-2">
@@ -260,7 +259,7 @@ export default function OrderComparatorPage() {
                     </p>
                   </div>
 
-                  <Accordion type="multiple" className="w-full" collapsible defaultValue={["matched-items", "discrepancies", "product-line-items"]}>
+                  <Accordion type="multiple" className="w-full" defaultValue={["matched-items", "discrepancies", "product-line-items"]}>
                     <AccordionItem value="matched-items">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
