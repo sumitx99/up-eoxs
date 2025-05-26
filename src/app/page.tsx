@@ -148,70 +148,84 @@ export default function OrderComparatorPage() {
           </p>
         </header>
 
-        <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-2xl">Input Order Documents</CardTitle>
-              <CardDescription>
-                Upload your purchase order and sales order documents (PDF, Image, CSV, Excel).
-              </CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
-                      <Input
-                        id="purchaseOrder"
-                        type="file"
-                        accept={ACCEPTED_EXTENSIONS_STRING}
-                        ref={purchaseOrderRef}
-                        onChange={(e) => handleFileChange(e, setPurchaseOrderFile)}
-                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                        required
-                        disabled={isLoading}
-                      />
-                  {purchaseOrderFile && (
-                    <p className="text-sm text-muted-foreground flex items-center mt-2">
-                      {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
-                    </p>
-                  )}
+        <div className="w-full max-w-6xl mx-auto grid grid-cols-1 gap-8">
+          
+          <Accordion type="single" collapsible className="w-full shadow-lg rounded-lg bg-card" defaultValue="input-documents">
+            <AccordionItem value="input-documents" className="border-b-0">
+              <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
+                {/* Content for the trigger, AccordionTrigger will add its own chevron */}
+                <div>
+                  <h2 className="text-2xl font-semibold flex items-center">
+                    <UploadCloud className="mr-3 h-7 w-7 text-primary" />
+                    Input Order Documents
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1.5">
+                    Upload your purchase order and sales order documents (PDF, Image, CSV, Excel).
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="salesOrder" className="text-lg font-medium">Sales Order Document</Label>
-                      <Input
-                        id="salesOrder"
-                        type="file"
-                        accept={ACCEPTED_EXTENSIONS_STRING}
-                        ref={salesOrderRef}
-                        onChange={(e) => handleFileChange(e, setSalesOrderFile)}
-                        className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                        required
-                        disabled={isLoading}
-                      />
-                  {salesOrderFile && (
-                    <p className="text-sm text-muted-foreground flex items-center mt-2">
-                      {getFileIcon(salesOrderFile)} Selected: {salesOrderFile.name} ({Math.round(salesOrderFile.size / 1024)} KB)
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || !purchaseOrderFile || !salesOrderFile}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Comparing Documents...
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud className="mr-2 h-5 w-5" />
-                      Compare Order Documents
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
+              </AccordionTrigger>
+              <AccordionContent className="p-0">
+                <Card className="shadow-none border-0 rounded-t-none"> {/* Keep Card for consistent form styling minus header */}
+                  <form onSubmit={handleSubmit}>
+                    <CardContent className="space-y-6 pt-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
+                            <Input
+                              id="purchaseOrder"
+                              type="file"
+                              accept={ACCEPTED_EXTENSIONS_STRING}
+                              ref={purchaseOrderRef}
+                              onChange={(e) => handleFileChange(e, setPurchaseOrderFile)}
+                              className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                              required
+                              disabled={isLoading}
+                            />
+                        {purchaseOrderFile && (
+                          <p className="text-sm text-muted-foreground flex items-center mt-2">
+                            {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="salesOrder" className="text-lg font-medium">Sales Order Document</Label>
+                            <Input
+                              id="salesOrder"
+                              type="file"
+                              accept={ACCEPTED_EXTENSIONS_STRING}
+                              ref={salesOrderRef}
+                              onChange={(e) => handleFileChange(e, setSalesOrderFile)}
+                              className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                              required
+                              disabled={isLoading}
+                            />
+                        {salesOrderFile && (
+                          <p className="text-sm text-muted-foreground flex items-center mt-2">
+                            {getFileIcon(salesOrderFile)} Selected: {salesOrderFile.name} ({Math.round(salesOrderFile.size / 1024)} KB)
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                    <CardFooter>
+                      <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || !purchaseOrderFile || !salesOrderFile}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            Comparing Documents...
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud className="mr-2 h-5 w-5" />
+                            Compare Order Documents
+                          </>
+                        )}
+                      </Button>
+                    </CardFooter>
+                  </form>
+                </Card>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
 
           <Card className="shadow-lg">
             <CardHeader>
