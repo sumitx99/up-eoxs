@@ -9,9 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, CheckCircle2, AlertCircle, BadgeHelp, Info } from 'lucide-react';
+import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, CheckCircle2, AlertCircle, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp } from 'lucide-react';
 import { compareOrdersAction } from './actions';
-import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy } from '@/ai/flows/compare-order-details';
+import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -114,6 +114,26 @@ export default function OrderComparatorPage() {
     setIsLoading(false);
   };
 
+  const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
+    switch (status) {
+      case 'MATCHED':
+        return <CheckCircle2 className="h-5 w-5 text-accent" />;
+      case 'MISMATCH_QUANTITY':
+      case 'MISMATCH_UNIT_PRICE':
+      case 'MISMATCH_TOTAL_PRICE':
+      case 'MISMATCH_DESCRIPTION':
+      case 'PARTIAL_MATCH_DETAILS_DIFFER':
+        return <AlertCircle className="h-5 w-5 text-destructive" />;
+      case 'PO_ONLY':
+        return <MinusCircle className="h-5 w-5 text-orange-500" />; 
+      case 'SO_ONLY':
+        return <PackagePlus className="h-5 w-5 text-blue-500" />; 
+      default:
+        return <HelpCircle className="h-5 w-5 text-muted-foreground" />;
+    }
+  };
+
+
   return (
     <TooltipProvider>
       <div className="min-h-screen flex flex-col items-center p-4 md:p-8 bg-background">
@@ -139,7 +159,6 @@ export default function OrderComparatorPage() {
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
-                  
                       <Input
                         id="purchaseOrder"
                         type="file"
@@ -150,7 +169,6 @@ export default function OrderComparatorPage() {
                         required
                         disabled={isLoading}
                       />
-                  
                   {purchaseOrderFile && (
                     <p className="text-sm text-muted-foreground flex items-center mt-2">
                       {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
@@ -159,7 +177,6 @@ export default function OrderComparatorPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="salesOrder" className="text-lg font-medium">Sales Order Document</Label>
-                  
                       <Input
                         id="salesOrder"
                         type="file"
@@ -170,7 +187,6 @@ export default function OrderComparatorPage() {
                         required
                         disabled={isLoading}
                       />
-                  
                   {salesOrderFile && (
                     <p className="text-sm text-muted-foreground flex items-center mt-2">
                       {getFileIcon(salesOrderFile)} Selected: {salesOrderFile.name} ({Math.round(salesOrderFile.size / 1024)} KB)
@@ -200,10 +216,10 @@ export default function OrderComparatorPage() {
             <CardHeader>
               <CardTitle className="text-2xl">Comparison Report</CardTitle>
               <CardDescription>
-                Review the comparison summary, matched items, and detailed discrepancies.
+                Review the comparison summary, general matches, discrepancies, and product line item details.
               </CardDescription>
             </CardHeader>
-            <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col"> {/* Added ID here */}
+            <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col space-y-6">
               {isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -219,7 +235,7 @@ export default function OrderComparatorPage() {
                 </Alert>
               )}
               {!isLoading && !error && comparisonResult && (
-                <div className="space-y-6">
+                <>
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
                       <BadgeHelp className="mr-2 h-6 w-6 text-primary" /> AI Summary
@@ -231,11 +247,11 @@ export default function OrderComparatorPage() {
 
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
-                      <CheckCircle2 className="mr-2 h-6 w-6 text-accent" />
-                       Matched Items
+                      <FileKey2 className="mr-2 h-6 w-6 text-blue-600" /> General Matched Fields
+                       {comparisonResult.matchedItems && ` (${comparisonResult.matchedItems.length})`}
                     </h3>
                     {(comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0) ? (
-                      <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
+                      <div className="border rounded-md overflow-hidden max-h-[200px] overflow-y-auto">
                         <Table>
                           <TableHeader className="bg-muted/50 sticky top-0 z-10">
                             <TableRow>
@@ -247,9 +263,9 @@ export default function OrderComparatorPage() {
                           <TableBody>
                             {comparisonResult.matchedItems.map((item, index) => (
                               <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
-                                <TableCell className="font-medium py-3 px-4">{item.field}</TableCell>
-                                <TableCell className="py-3 px-4">{item.value}</TableCell>
-                                <TableCell className="text-center py-3 px-4">
+                                <TableCell className="font-medium py-2 px-3 text-sm">{item.field}</TableCell>
+                                <TableCell className="py-2 px-3 text-sm">{item.value}</TableCell>
+                                <TableCell className="text-center py-2 px-3 text-sm">
                                   <span className="capitalize">{item.matchQuality || 'Exact'}</span>
                                 </TableCell>
                               </TableRow>
@@ -258,21 +274,21 @@ export default function OrderComparatorPage() {
                         </Table>
                       </div>
                     ) : (
-                      <Alert variant="default" className="mt-2">
-                        <Info className="h-5 w-5" />
-                        <AlertTitle>No Matched Items Identified</AlertTitle>
-                        <AlertDescription>The AI did not find any items that match between the two documents.</AlertDescription>
+                      <Alert variant="default" className="mt-2 text-sm">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle className="text-base">No General Matched Fields</AlertTitle>
+                        <AlertDescription>The AI did not find any general fields that match between the two documents.</AlertDescription>
                       </Alert>
                     )}
                   </div>
-
+                  
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
-                      <AlertCircle className="mr-2 h-6 w-6 text-destructive" />
-                       Discrepancies
+                      <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> General Discrepancies
+                       {comparisonResult.discrepancies && ` (${comparisonResult.discrepancies.length})`}
                     </h3>
                     {(comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0) ? (
-                       <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
+                       <div className="border rounded-md overflow-hidden max-h-[200px] overflow-y-auto">
                         <Table>
                           <TableHeader className="bg-muted/50 sticky top-0 z-10">
                             <TableRow>
@@ -285,10 +301,10 @@ export default function OrderComparatorPage() {
                           <TableBody>
                             {comparisonResult.discrepancies.map((d, index) => (
                               <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
-                                <TableCell className="font-medium py-3 px-4">{d.field}</TableCell>
-                                <TableCell className="py-3 px-4">{d.purchaseOrderValue}</TableCell>
-                                <TableCell className="py-3 px-4">{d.salesOrderValue}</TableCell>
-                                <TableCell className="text-center py-3 px-4">
+                                <TableCell className="font-medium py-2 px-3 text-sm">{d.field}</TableCell>
+                                <TableCell className="py-2 px-3 text-sm">{d.purchaseOrderValue}</TableCell>
+                                <TableCell className="py-2 px-3 text-sm">{d.salesOrderValue}</TableCell>
+                                <TableCell className="text-center py-2 px-3 text-sm">
                                   <Tooltip delayDuration={100}>
                                     <TooltipTrigger asChild>
                                       <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
@@ -305,14 +321,71 @@ export default function OrderComparatorPage() {
                         </Table>
                       </div>
                     ) : (
-                       <Alert variant="default" className="mt-2">
-                        <Info className="h-5 w-5" />
-                        <AlertTitle>No Discrepancies Found</AlertTitle>
-                        <AlertDescription>The AI did not find any discrepancies between the two documents.</AlertDescription>
+                       <Alert variant="default" className="mt-2 text-sm">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle className="text-base">No General Discrepancies Found</AlertTitle>
+                        <AlertDescription>The AI did not find any general discrepancies between the two documents.</AlertDescription>
                       </Alert>
                     )}
                   </div>
-                </div>
+
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
+                      <PackageSearch className="mr-2 h-6 w-6 text-purple-600" /> Product Line Item Comparison
+                       {comparisonResult.productLineItemComparisons && ` (${comparisonResult.productLineItemComparisons.length})`}
+                    </h3>
+                    {(comparisonResult.productLineItemComparisons && comparisonResult.productLineItemComparisons.length > 0) ? (
+                      <div className="border rounded-md overflow-hidden max-h-[400px] overflow-y-auto">
+                        <Table>
+                          <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                            <TableRow>
+                              <TableHead className="font-semibold text-xs w-[15%]">PO Product</TableHead>
+                              <TableHead className="font-semibold text-xs w-[7%]">PO Qty</TableHead>
+                              <TableHead className="font-semibold text-xs w-[10%]">PO Unit Price</TableHead>
+                              <TableHead className="font-semibold text-xs w-[10%]">PO Total</TableHead>
+                              <TableHead className="font-semibold text-xs w-[15%]">SO Product</TableHead>
+                              <TableHead className="font-semibold text-xs w-[7%]">SO Qty</TableHead>
+                              <TableHead className="font-semibold text-xs w-[10%]">SO Unit Price</TableHead>
+                              <TableHead className="font-semibold text-xs w-[10%]">SO Total</TableHead>
+                              <TableHead className="font-semibold text-xs w-[16%] text-center">Status / Notes</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {comparisonResult.productLineItemComparisons.map((item, index) => (
+                              <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50'}>
+                                <TableCell className="py-2 px-2 text-xs">{item.poProductDescription || 'N/A'}</TableCell>
+                                <TableCell className="py-2 px-2 text-xs text-center">{item.poQuantity || 'N/A'}</TableCell>
+                                <TableCell className="py-2 px-2 text-xs text-right">{item.poUnitPrice || 'N/A'}</TableCell>
+                                <TableCell className="py-2 px-2 text-xs text-right">{item.poTotalPrice || 'N/A'}</TableCell>
+                                <TableCell className="py-2 px-2 text-xs">{item.soProductDescription || 'N/A'}</TableCell>
+                                <TableCell className="py-2 px-2 text-xs text-center">{item.soQuantity || 'N/A'}</TableCell>
+                                <TableCell className="py-2 px-2 text-xs text-right">{item.soUnitPrice || 'N/A'}</TableCell>
+                                <TableCell className="py-2 px-2 text-xs text-right">{item.soTotalPrice || 'N/A'}</TableCell>
+                                <TableCell className="text-center py-2 px-2 text-xs">
+                                  <Tooltip delayDuration={100}>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-block cursor-help">{getProductStatusIcon(item.status)}</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
+                                      <p className="font-semibold capitalize">{item.status.replace(/_/g, ' ').toLowerCase()}:</p>
+                                      <p className="text-sm">{item.comparisonNotes || 'No specific notes.'}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <Alert variant="default" className="mt-2 text-sm">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle className="text-base">No Product Line Items Compared</AlertTitle>
+                        <AlertDescription>The AI did not identify or compare specific product line items from the documents.</AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                </>
               )}
               {!isLoading && !error && !comparisonResult && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
@@ -336,4 +409,3 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
-

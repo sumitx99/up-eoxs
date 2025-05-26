@@ -5,11 +5,14 @@
 
 /**
  * @fileOverview Compares product names, quantities, discounts, and taxes between a purchase order and a sales order document (PDF, image, CSV, or Excel) using AI.
- * Identifies both discrepancies and matching items.
+ * Identifies both discrepancies and matching items for overall fields, and provides a detailed comparison for product line items.
  *
- * - compareOrderDetails - Compares order details from document content and identifies discrepancies and matches.
+ * - compareOrderDetails - Compares order details from document content and identifies discrepancies, matches, and detailed product line comparisons.
  * - CompareOrderDetailsInput - The input type for the compareOrderDetails function, expecting documents as data URIs.
  * - CompareOrderDetailsOutput - The output type for the compareOrderDetails function.
+ * - MatchedItem - Type for general matched fields.
+ * - Discrepancy - Type for general discrepancies.
+ * - ProductLineItemComparison - Type for detailed product line item comparisons.
  */
 
 import {ai} from '@/ai/genkit';
@@ -22,7 +25,7 @@ const CompareOrderDetailsInputSchema = z.object({
 export type CompareOrderDetailsInput = z.infer<typeof CompareOrderDetailsInputSchema>;
 
 const DiscrepancySchema = z.object({
-  field: z.string().describe('The field with a discrepancy (e.g., product name, quantity, discount, tax).'),
+  field: z.string().describe('The general document field with a discrepancy (e.g., PO Number, Overall Discount, Payment Terms). This is for non-product line items.'),
   purchaseOrderValue: z.string().describe('The value from the purchase order document.'),
   salesOrderValue: z.string().describe('The value from the sales order document.'),
   reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch.'),
@@ -31,16 +34,31 @@ export type Discrepancy = z.infer<typeof DiscrepancySchema>;
 
 
 const MatchedItemSchema = z.object({
-  field: z.string().describe('The field that matches (e.g., PO Number, Buyer Name, Product SKU).'),
+  field: z.string().describe('The general document field that matches (e.g., PO Number, Buyer Name, Vendor). This is for non-product line items.'),
   value: z.string().describe('The common value found in both the purchase order and sales order documents.'),
   matchQuality: z.enum(['exact', 'normalized', 'inferred']).optional().describe('The quality of the match (e.g., exact string match, match after normalization, or inferred match based on context). Default to "exact" if not specified.'),
 });
 export type MatchedItem = z.infer<typeof MatchedItemSchema>;
 
+const ProductLineItemComparisonSchema = z.object({
+  poProductDescription: z.string().optional().describe('Product name, description, or SKU from the Purchase Order line item. "N/A" if not applicable (e.g., SO only item).'),
+  poQuantity: z.string().optional().describe('Quantity from the Purchase Order line item. "N/A" if not applicable.'),
+  poUnitPrice: z.string().optional().describe('Unit price from the Purchase Order line item. "N/A" if not applicable.'),
+  poTotalPrice: z.string().optional().describe('Total price for the line item from the Purchase Order. "N/A" if not applicable.'),
+  soProductDescription: z.string().optional().describe('Product name, description, or SKU from the Sales Order line item. "N/A" if not applicable (e.g., PO only item).'),
+  soQuantity: z.string().optional().describe('Quantity from the Sales Order line item. "N/A" if not applicable.'),
+  soUnitPrice: z.string().optional().describe('Unit price from the Sales Order line item. "N/A" if not applicable.'),
+  soTotalPrice: z.string().optional().describe('Total price for the line item from the Sales Order. "N/A" if not applicable.'),
+  status: z.enum(['MATCHED', 'MISMATCH_QUANTITY', 'MISMATCH_UNIT_PRICE', 'MISMATCH_TOTAL_PRICE', 'MISMATCH_DESCRIPTION', 'PO_ONLY', 'SO_ONLY', 'PARTIAL_MATCH_DETAILS_DIFFER']).describe('The comparison status for this product line item pairing.'),
+  comparisonNotes: z.string().describe('AI\'s brief notes explaining the status or highlighting specific differences for this line item (e.g., "Quantities differ", "Unit prices mismatch", "Product found only in PO").'),
+});
+export type ProductLineItemComparison = z.infer<typeof ProductLineItemComparisonSchema>;
+
 const CompareOrderDetailsOutputSchema = z.object({
-  discrepancies: z.array(DiscrepancySchema).describe('An array of discrepancies found between the purchase order and sales order documents. This should always be an array, even if empty.'),
-  matchedItems: z.array(MatchedItemSchema).describe('An array of items/fields that match between the purchase order and sales order documents. This should always be an array, even if empty. Strive to find matches for common header fields.'),
-  summary: z.string().describe('A summary of the comparison, highlighting key discrepancies and confirmed matches found in the document contents. If any limitations were encountered processing the entirety of any document, this must be noted here.'),
+  discrepancies: z.array(DiscrepancySchema).describe('An array of general discrepancies found (e.g., for header fields, overall totals, terms). This should always be an array, even if empty.'),
+  matchedItems: z.array(MatchedItemSchema).describe('An array of general items/fields that match (e.g., for header fields). This should always be an array, even if empty. Strive to find matches for common header fields.'),
+  productLineItemComparisons: z.array(ProductLineItemComparisonSchema).describe('An array detailing the comparison of each product line item found in the documents. This should always be an array, even if empty.'),
+  summary: z.string().describe('A summary of the overall comparison, highlighting key discrepancies, confirmed matches, and product line item findings. If any limitations were encountered processing the entirety of any document, this must be noted here.'),
 });
 
 export type CompareOrderDetailsOutput = z.infer<typeof CompareOrderDetailsOutputSchema>;
@@ -58,9 +76,8 @@ const compareOrderDetailsPrompt = ai.definePrompt({
     schema: CompareOrderDetailsOutputSchema,
   },
   prompt: `You are an AI assistant specializing in comparing purchase orders (POs) and sales orders (SOs) provided as various document types.
-Your task is to meticulously analyze the **entire content** of both documents, from start to finish, including all pages, headers, footers, and line items. Identify discrepancies AND matching items in product names (including item codes or SKUs if present), quantities, unit prices, total prices, discounts (line item and overall), taxes (line item and overall), shipping costs, PO Number, Buyer, Vendor, Payment Terms, Freight Terms, Total Amount, and any other relevant financial or item-specific details. Do not stop processing part-way through a document.
-
-It is absolutely critical for the accuracy of this task that every piece of information, from all pages and all sections of both documents, is meticulously reviewed and considered. Incomplete analysis or overlooking any part of the documents will lead to incorrect and unusable results.
+Your task is to meticulously analyze the **entire content** of both documents, from start to finish, including all pages, headers, footers, and line items.
+It is absolutely critical for the accuracy of this task that every piece of information, from all pages and all sections of both documents, is meticulously reviewed and considered. Incomplete analysis or overlooking any part of the documents will lead to incorrect and unusable results. Do not stop processing part-way through a document.
 
 The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) format.
 - If the document is an image, perform OCR to extract textual content.
@@ -75,28 +92,39 @@ Purchase Order Document:
 Sales Order Document:
 {{media url=salesOrder}}
 
-Based on your analysis of the document contents:
+Based on your analysis of the document contents, provide the following:
 
-1.  Identify all **discrepancies**. For each discrepancy, populate the 'discrepancies' array with objects specifying:
-    *   'field': The specific field or item that has a discrepancy (e.g., "Product 'ABC' Quantity", "Overall Discount", "Payment Terms").
-    *   'purchaseOrderValue': The value of this field as found in the Purchase Order document. If the field is not found, state "Not specified" or "N/A".
-    *   'salesOrderValue': The value of this field as found in the Sales Order document. If the field is not found, state "Not specified" or "N/A".
-    *   'reason': A brief explanation of the discrepancy (e.g., "Quantity differs", "Discount applied in PO but not in SO", "Unit price mismatch", "Item listed in PO but not in SO", "Payment terms do not match").
+**1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
+   - Identify general discrepancies (non-product line items). For each, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "PO Number", "Overall Discount"), 'purchaseOrderValue', 'salesOrderValue', 'reason'.
+   - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'.
 
-2.  Identify all **matching items/fields**. These are details that are consistent or equivalent across both documents. For each matched item, populate the 'matchedItems' array with objects specifying:
-    *   'field': The name of the field that matches (e.g., "PO Number", "Buyer Name", "Product 'XYZ' Unit Price", "Vendor").
-    *   'value': The common value found in both documents for that field.
-    *   'matchQuality': (Optional) Describe the quality of the match. Use 'exact' if the values are identical. Use 'normalized' if they match after minor adjustments like case changes or removing extra spaces. Use 'inferred' if the match is clear from context despite slight wording differences. Default to 'exact' if not specified.
+**2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
+   - Perform a detailed comparison of product line items. For each product line item found in the PO, try to find its corresponding item in the SO (and vice-versa) based on product description, SKU, or item code.
+   - For each identified product line item pairing (or an item found only in one document):
+     - Extract 'poProductDescription', 'poQuantity', 'poUnitPrice', 'poTotalPrice' from the PO. Use "N/A" if not applicable (e.g., item is SO only).
+     - Extract 'soProductDescription', 'soQuantity', 'soUnitPrice', 'soTotalPrice' from the SO. Use "N/A" if not applicable (e.g., item is PO only).
+     - Determine a 'status':
+       - 'MATCHED': If description, quantity, and prices (unit or total) appear to match or are equivalent.
+       - 'MISMATCH_QUANTITY': If quantities differ.
+       - 'MISMATCH_UNIT_PRICE': If unit prices differ.
+       - 'MISMATCH_TOTAL_PRICE': If total line item prices differ (and unit price/qty might also be causes).
+       - 'MISMATCH_DESCRIPTION': If products seem related but descriptions/SKUs have notable differences.
+       - 'PO_ONLY': If the item is found only in the Purchase Order.
+       - 'SO_ONLY': If the item is found only in the Sales Order.
+       - 'PARTIAL_MATCH_DETAILS_DIFFER': If it's likely the same product but some key details (other than quantity or price) are inconsistent.
+     - Provide 'comparisonNotes': A brief explanation for the status (e.g., "Quantities differ (PO: 5, SO: 4)", "Unit prices mismatch", "Product found only in PO", "Description slightly different but quantities match").
+   - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document, this array should be empty.
 
-Provide a concise 'summary' of the comparison in the 'summary' field. This summary should highlight the most significant discrepancies and also mention key confirmed matches. **If, for any reason (e.g., document length, complexity, unreadable sections), you were unable to process the entirety of either document, you MUST explicitly state this limitation in your summary.**
+**3. Summary ('summary' field):**
+   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields, key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched, 1 had quantity mismatch, 1 PO item not in SO"). **If, for any reason (e.g., document length, complexity, unreadable sections), you were unable to process the entirety of either document, you MUST explicitly state this limitation in your summary.**
 
 **Important Output Structure:**
-- The 'discrepancies' array should always be present in the output. If no discrepancies are found, it should be an empty array (\`[]\`).
-- The 'matchedItems' array should always be present in the output. If no matches are found after careful comparison, it should be an empty array (\`[]\`). Strive to find matches for common header fields (e.g., PO Number, Buyer Name, Vendor Name) if they are consistent, even if other details differ.
+- The 'discrepancies' array should always be present. If no general discrepancies are found, it should be an empty array (\`[]\`).
+- The 'matchedItems' array should always be present. If no general matches are found, it should be an empty array (\`[]\`).
+- The 'productLineItemComparisons' array should always be present. If no product line items are found or compared, it should be an empty array (\`[]\`).
 
 Be thorough, accurate, and **process all provided content from all document types**. If the document content is unreadable, ambiguous, or crucial sections are missing, note this limitation in your summary.
-If dealing with CSV/Excel, clearly state if the structure made it difficult to extract specific fields.
-Ensure all fields in the output schema (discrepancies, matchedItems, summary) are populated according to your findings.
+Ensure all fields in the output schema are populated according to your findings.
 `,
   config: {
     safetySettings: [
@@ -131,32 +159,30 @@ const compareOrderDetailsFlow = ai.defineFlow(
       const {output} = await compareOrderDetailsPrompt(input);
       if (!output) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output.');
-        // Return a default structure in case of completely null output from AI, though Zod should catch this.
         return {
             summary: 'AI model failed to return valid comparison data. Please check the documents or try again.',
             matchedItems: [],
             discrepancies: [],
+            productLineItemComparisons: [],
         };
       }
-      // Ensure matchedItems and discrepancies are always arrays, even if the model doesn't return them or returns them as null
-      // Zod schema with .array() should handle this, but this is an extra safeguard.
+      // Ensure arrays are always present
       output.matchedItems = Array.isArray(output.matchedItems) ? output.matchedItems : [];
       output.discrepancies = Array.isArray(output.discrepancies) ? output.discrepancies : [];
+      output.productLineItemComparisons = Array.isArray(output.productLineItemComparisons) ? output.productLineItemComparisons : [];
       
       return output;
     } catch (error) {
       console.error("Error in compareOrderDetailsFlow: ", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('CLIENT_ERROR') || errorMessage.toLowerCase().includes('unsupported mime type') || errorMessage.toLowerCase().includes('failed to parse content from bytes') || errorMessage.toLowerCase().includes('format error') || errorMessage.toLowerCase().includes('consumer_suspended')) {
-        // For client-side display, rethrow with a user-friendly message.
-        // The specific CONSUMER_SUSPENDED error should ideally be caught by the global error handler or UI.
         throw new Error(`The AI model could not process one or both of the documents. Please ensure they are valid and well-formatted (PDF, Image, CSV, Excel) and try again. Details: ${errorMessage}`);
       }
-      // For other errors, provide a generic fallback.
        return {
             summary: `An unexpected error occurred during AI processing: ${errorMessage}. Please try again.`,
             matchedItems: [],
             discrepancies: [],
+            productLineItemComparisons: [],
         };
     }
   }
