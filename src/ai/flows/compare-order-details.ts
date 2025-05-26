@@ -96,7 +96,7 @@ Based on your analysis of the document contents, provide the following:
 
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
    - Identify general discrepancies (non-product line items OR unmatched products from line item analysis).
-     - For discrepancies in general fields (e.g., "PO Number", "Overall Discount"), populate the 'discrepancies' array with objects specifying: 'field', 'purchaseOrderValue', 'salesOrderValue', 'reason'.
+     - For discrepancies in general fields (e.g., 'PO Number', 'Overall Discount'), populate the 'discrepancies' array with objects specifying: 'field', 'purchaseOrderValue', 'salesOrderValue', 'reason'.
      - For product line items found in the PO but not in the SO (determined during your detailed product line item analysis step below), add a discrepancy: 'field': "Unmatched PO Product: [Product Name/SKU from PO]", 'purchaseOrderValue': "[Details from PO line item]", 'salesOrderValue': "Not found in SO", 'reason': "Product listed in Purchase Order only."
      - For product line items found in the SO but not in the PO (determined during your detailed product line item analysis step below), add a discrepancy: 'field': "Unmatched SO Product: [Product Name/SKU from SO]", 'purchaseOrderValue': "Not found in PO", 'salesOrderValue': "[Details from SO line item]", 'reason': "Product listed in Sales Order only."
    - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields.
@@ -188,7 +188,8 @@ const compareOrderDetailsFlow = ai.defineFlow(
         throw new Error(`The AI model could not process one or both of the documents or there's an issue with API access. Please ensure documents are valid and API key permissions are correct. Details: ${errorMessage}`);
       }
       // For other unexpected errors during AI processing, also throw an error
-      throw new Error(`An unexpected error occurred during AI processing: ${errorMessage}. Please try again.`);
+      throw new Error(`The AI model encountered an issue during processing. This could be due to document complexity, content, or a temporary problem. Details: ${errorMessage}. Please try again or use different documents.`);
     }
   }
 );
+

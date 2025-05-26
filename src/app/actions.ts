@@ -1,3 +1,4 @@
+
 // src/app/actions.ts
 'use server';
 
@@ -86,10 +87,16 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     const errorMessage = e instanceof Error ? e.message : String(e) || 'An unexpected error occurred during comparison.';
     
     // Generalize error for document processing
-    if (errorMessage.includes('CLIENT_ERROR') || errorMessage.toLowerCase().includes('unsupported mime type') || errorMessage.toLowerCase().includes('failed to parse content') || errorMessage.toLowerCase().includes('format')) {
-         return { error: `Failed to process document: The AI model could not read or interpret one or both of the provided files. Please ensure they are valid and well-formatted (PDF, Image, CSV, Excel). Details: ${errorMessage}` };
+    if (errorMessage.includes('CLIENT_ERROR') || 
+        errorMessage.toLowerCase().includes('unsupported mime type') || 
+        errorMessage.toLowerCase().includes('failed to parse content') || 
+        errorMessage.toLowerCase().includes('format error') ||
+        errorMessage.toLowerCase().includes('consumer_suspended') ||
+        errorMessage.toLowerCase().includes('permission denied')
+        ) {
+         return { error: `Failed to process document: The AI model could not read or interpret one or both of the provided files, or there's an API access issue. Please ensure documents are valid, well-formatted (PDF, Image, CSV, Excel), and API key permissions are correct. Details: ${errorMessage}` };
     }
-    return { error: `Failed to compare orders: ${errorMessage}` };
+    return { error: `Failed to compare orders. The AI may have encountered an issue processing the documents. Please ensure they are clear and valid, or try again. Details: ${errorMessage}` };
   }
 }
 
