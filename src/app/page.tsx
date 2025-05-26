@@ -118,13 +118,13 @@ export default function OrderComparatorPage() {
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
-        return <CheckCircle2 className="h-5 w-5 text-accent" />;
+        return <span>✅</span>;
       case 'MISMATCH_QUANTITY':
       case 'MISMATCH_UNIT_PRICE':
       case 'MISMATCH_TOTAL_PRICE':
       case 'MISMATCH_DESCRIPTION':
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
-        return <AlertCircle className="h-5 w-5 text-destructive" />;
+        return <span>❌</span>;
       case 'PO_ONLY':
         return <MinusCircle className="h-5 w-5 text-orange-500" />; 
       case 'SO_ONLY':
