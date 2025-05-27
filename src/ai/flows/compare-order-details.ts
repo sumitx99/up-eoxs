@@ -148,7 +148,7 @@ Ensure all fields in the output schema are populated according to your findings.
       },
       {
         category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-        threshold: 'BLOCK_ONLY_HIGH', // Changed from BLOCK_MEDIUM_AND_ABOVE
+        threshold: 'BLOCK_ONLY_HIGH', 
       },
     ],
   }
@@ -165,10 +165,9 @@ const compareOrderDetailsFlow = ai.defineFlow(
       const {output} = await compareOrderDetailsPrompt(input);
       if (!output) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output.');
-        // Throw an error so it's caught by the action and displayed prominently
         throw new Error('AI model failed to return valid comparison data. Please check the documents or try again.');
       }
-      // Ensure arrays are always present (though Zod schema should enforce this, this is a defensive measure)
+      // Ensure arrays are always present
       output.matchedItems = Array.isArray(output.matchedItems) ? output.matchedItems : [];
       output.discrepancies = Array.isArray(output.discrepancies) ? output.discrepancies : [];
       output.productLineItemComparisons = Array.isArray(output.productLineItemComparisons) ? output.productLineItemComparisons : [];
@@ -178,18 +177,18 @@ const compareOrderDetailsFlow = ai.defineFlow(
       console.error("Error in compareOrderDetailsFlow: ", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       
-      // Check for specific error messages that indicate document processing issues or API key problems
-      if (errorMessage.includes('CLIENT_ERROR') || 
+      if (errorMessage.toLowerCase().includes('not found for api version') ||
+          errorMessage.toLowerCase().includes('model not found')) {
+          throw new Error(`The specified AI model is not accessible. Please check the model name and API key permissions. Details: ${errorMessage}`);
+      } else if (errorMessage.includes('CLIENT_ERROR') || 
           errorMessage.toLowerCase().includes('unsupported mime type') || 
-          errorMessage.toLowerCase().includes('failed to parse content') || // General parsing
-          errorMessage.toLowerCase().includes('failed to parse content from bytes') || // Specific parsing
+          errorMessage.toLowerCase().includes('failed to parse content') || 
+          errorMessage.toLowerCase().includes('failed to parse content from bytes') || 
           errorMessage.toLowerCase().includes('format error') ||
-          errorMessage.toLowerCase().includes('consumer_suspended') || // API key issue
-          errorMessage.toLowerCase().includes('permission denied')) { // API key/permission issue
-        // Re-throw these critical errors to be caught by the calling action and displayed accurately
+          errorMessage.toLowerCase().includes('consumer_suspended') || 
+          errorMessage.toLowerCase().includes('permission denied')) { 
         throw new Error(`The AI model could not process one or both of the documents or there's an issue with API access. Please ensure documents are valid and API key permissions are correct. Details: ${errorMessage}`);
       }
-      // For other unexpected errors during AI processing, also throw an error
       throw new Error(`The AI model encountered an issue during processing. This could be due to document complexity, content, or a temporary problem. Details: ${errorMessage}. Please try again or use different documents.`);
     }
   }

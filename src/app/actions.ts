@@ -76,17 +76,20 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     });
     return { data: result };
   } catch (e: unknown) {
-    console.error('SERVER_ACTION_ERROR comparing orders:', e); // Log the full error on the server
+    // Log the raw error to the server console first, as this is most reliable for debugging.
+    console.error('SERVER_ACTION_CRITICAL_ERROR comparing orders:', e); 
 
-    let simpleErrorMessage = 'An unexpected error occurred during the comparison. Check server logs for details.';
+    let clientErrorMessage = 'Comparison failed due to an unexpected server-side error. Please check server logs for full details.';
     if (e instanceof Error) {
-      simpleErrorMessage = e.message;
+        // Try to use the error message directly if it's an Error instance
+        clientErrorMessage = `Comparison Failed: ${e.message.substring(0, 500)}`;
     } else if (typeof e === 'string') {
-      simpleErrorMessage = e;
+        clientErrorMessage = `Comparison Failed: ${e.substring(0, 500)}`;
     }
+    // For any other type of 'e', the generic message with a timestamp will be used.
+    // This ensures we always return a string in the error field.
     
-    // Return a simplified error message to the client
-    // The substring is to prevent excessively long error messages from breaking client UI.
-    return { error: `Comparison Failed: ${simpleErrorMessage.substring(0, 500)}` };
+    return { error: clientErrorMessage };
   }
 }
+
