@@ -75,33 +75,18 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
       salesOrder: salesOrderDataUri,
     });
     return { data: result };
-  } catch (e: unknown) { // Catch 'unknown' for broader error types
-    console.error('SERVER_ACTION_ERROR comparing orders:', e); // Log the full error object
+  } catch (e: unknown) {
+    console.error('SERVER_ACTION_ERROR comparing orders:', e); // Log the full error on the server
 
-    let errorMessage = 'An unexpected error occurred during the comparison process.';
-    
+    let simpleErrorMessage = 'An unexpected error occurred during the comparison. Check server logs for details.';
     if (e instanceof Error) {
-      errorMessage = e.message;
-      // Attempt to get more details if it's a known error structure (e.g., from Genkit/Google AI)
-      // Check for common properties that might hold more specific error info
-      const errorDetails = (e as any).details || (e as any).cause || (e as any).error;
-      if (errorDetails) {
-        // If errorDetails is an object, stringify it, otherwise use it directly
-        errorMessage += ` Details: ${typeof errorDetails === 'object' ? JSON.stringify(errorDetails) : String(errorDetails)}`;
-      }
+      simpleErrorMessage = e.message;
     } else if (typeof e === 'string') {
-      errorMessage = e;
-    } else if (e && typeof e === 'object' && 'message' in e && typeof (e as {message: unknown}).message === 'string') {
-      // Handle cases where e is an object with a message property
-      errorMessage = (e as {message: string}).message;
-    } else {
-      // Fallback for other types or complex objects, avoid complex stringify in client-facing message
-      errorMessage = 'An unknown error object was caught by the server.';
+      simpleErrorMessage = e;
     }
     
-    // Sanitize and cap length for the client-facing message
-    const clientErrorMessage = `Failed to compare orders. Please check server logs for full details. Server message: ${errorMessage.replace(/[^\x20-\x7E\n\r\t]/g, '').substring(0, 1000)}`;
-    
-    return { error: clientErrorMessage };
+    // Return a simplified error message to the client
+    // The substring is to prevent excessively long error messages from breaking client UI.
+    return { error: `Comparison Failed: ${simpleErrorMessage.substring(0, 500)}` };
   }
 }
