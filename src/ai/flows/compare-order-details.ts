@@ -148,7 +148,7 @@ Ensure all fields in the output schema are populated according to your findings.
       },
       {
         category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+        threshold: 'BLOCK_ONLY_HIGH', // Changed from BLOCK_MEDIUM_AND_ABOVE
       },
     ],
   }
