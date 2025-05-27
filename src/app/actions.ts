@@ -19,8 +19,7 @@ const ALLOWED_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' // .xlsx
 ];
 
-// Helper function to validate file types more robustly, considering .csv, .xls, .xlsx extensions
-// as their MIME types can sometimes be generic (e.g., application/octet-stream).
+// Helper function to validate file types more robustly
 function isValidFileType(file: File): boolean {
   if (ALLOWED_MIME_TYPES.includes(file.type)) {
     return true;
@@ -36,9 +35,6 @@ function isValidFileType(file: File): boolean {
 async function fileToDataUri(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');
-  // Ensure the MIME type used in the data URI is one that the AI model can likely handle or is standard.
-  // For CSV/Excel, text/plain or application/octet-stream might be what's passed if original type isn't specific.
-  // The model will rely on prompt instructions for these.
   let mimeType = file.type;
   if ((file.name.toLowerCase().endsWith('.csv') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.csv')) {
     mimeType = 'text/csv';
@@ -47,8 +43,6 @@ async function fileToDataUri(file: File): Promise<string> {
   } else if ((file.name.toLowerCase().endsWith('.xlsx') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xlsx')) {
     mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   }
-
-
   return `data:${mimeType || 'application/octet-stream'};base64,${base64}`;
 }
 
@@ -69,7 +63,6 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     if (!ALLOWED_MIME_TYPES.includes(soType) && (salesOrderFile.name.endsWith('.csv') || salesOrderFile.name.endsWith('.xls') || salesOrderFile.name.endsWith('.xlsx'))) {
         soType = `file with extension ${salesOrderFile.name.split('.').pop()}`;
     }
-
     return { error: `Invalid file type. Please upload supported document types (PDF, Image, CSV, Excel). PO: ${poType}, SO: ${soType}` };
   }
 
@@ -82,32 +75,33 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
       salesOrder: salesOrderDataUri,
     });
     return { data: result };
-  } catch (e) {
-    // Log the full error on the server for debugging
-    console.error('SERVER_ACTION_ERROR comparing orders:', e); 
+  } catch (e: unknown) { // Catch 'unknown' for broader error types
+    console.error('SERVER_ACTION_ERROR comparing orders:', e); // Log the full error object
 
-    let detailedErrorMessage = 'An unexpected error occurred during the comparison process.';
+    let errorMessage = 'An unexpected error occurred during the comparison process.';
+    
     if (e instanceof Error) {
-      detailedErrorMessage = e.message;
-    } else if (typeof e === 'string') {
-      detailedErrorMessage = e;
-    } else {
-      // Try to stringify if it's an object, otherwise use a generic message
-      try {
-        detailedErrorMessage = JSON.stringify(e);
-      } catch (stringifyError) {
-        console.error('SERVER_ACTION_ERROR: Could not stringify error object:', stringifyError);
-        detailedErrorMessage = 'An unknown and unstringifyable error occurred.';
+      errorMessage = e.message;
+      // Attempt to get more details if it's a known error structure (e.g., from Genkit/Google AI)
+      // Check for common properties that might hold more specific error info
+      const errorDetails = (e as any).details || (e as any).cause || (e as any).error;
+      if (errorDetails) {
+        // If errorDetails is an object, stringify it, otherwise use it directly
+        errorMessage += ` Details: ${typeof errorDetails === 'object' ? JSON.stringify(errorDetails) : String(errorDetails)}`;
       }
+    } else if (typeof e === 'string') {
+      errorMessage = e;
+    } else if (e && typeof e === 'object' && 'message' in e && typeof (e as {message: unknown}).message === 'string') {
+      // Handle cases where e is an object with a message property
+      errorMessage = (e as {message: string}).message;
+    } else {
+      // Fallback for other types or complex objects, avoid complex stringify in client-facing message
+      errorMessage = 'An unknown error object was caught by the server.';
     }
     
-    // Sanitize the detailed error message to remove potentially problematic characters for client display
-    const sanitizedDetailedErrorMessage = detailedErrorMessage.replace(/[^\x20-\x7E\n\r\t]/g, '');
-
-    const userFacingError = `Failed to compare orders. The AI may have encountered an issue processing the documents. Please ensure they are clear and valid, or try again. Details: ${sanitizedDetailedErrorMessage}`;
+    // Sanitize and cap length for the client-facing message
+    const clientErrorMessage = `Failed to compare orders. Please check server logs for full details. Server message: ${errorMessage.replace(/[^\x20-\x7E\n\r\t]/g, '').substring(0, 1000)}`;
     
-    // Ensure the error message sent to client is not overly long if the detailed message is huge
-    const maxErrorLength = 1000; // Cap the length of the error message sent to client
-    return { error: userFacingError.substring(0, maxErrorLength) };
+    return { error: clientErrorMessage };
   }
 }
