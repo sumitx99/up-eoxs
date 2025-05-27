@@ -18,6 +18,6 @@ if (!apiKey && process.env.NODE_ENV !== 'development') { // Stricter check for n
 
 export const ai = genkit({
   plugins: [googleAI({ apiKey })], // Explicitly passing the apiKey
-  model: 'googleai/gemini-2.5-pro-preview-05-06', // Updated to specified Gemini 2.5 Pro preview model
+  model: 'googleai/gemini-1.5-flash-latest', // Reverted to a known working model
 });
 
