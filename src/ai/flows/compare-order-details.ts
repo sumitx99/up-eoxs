@@ -95,13 +95,20 @@ Sales Order Document:
 Based on your analysis of the document contents, provide the following:
 
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
-   - Beyond the detailed product line items (covered in section 2), you must also meticulously compare **general document fields**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
-   - For any discrepancies found in these **general document fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address"), 'purchaseOrderValue', 'salesOrderValue', and 'reason' for the discrepancy.
-   - **Additionally**, for product line items identified as unmatched during the detailed product line item analysis (section 2):
-     - For items found in the PO but not in the SO, add a discrepancy: 'field': "Unmatched PO Product: [Product Name/SKU from PO]", 'purchaseOrderValue': "[Details from PO line item]", 'salesOrderValue': "Not found in SO", 'reason': "Product listed in Purchase Order only."
-     - For items found in the SO but not in the PO, add a discrepancy: 'field': "Unmatched SO Product: [Product Name/SKU from SO]", 'purchaseOrderValue': "Not found in PO", 'salesOrderValue': "[Details from SO line item]", 'reason': "Product listed in Sales Order only."
-     - **Crucially, ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' during the detailed product line item analysis (section 2) results in a corresponding entry in this 'discrepancies' array (section 1).**
-   - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Buyer Name, Vendor Name, Order Dates, etc.
+
+   **A. Document-Level Field Discrepancies:**
+      - Meticulously compare **general document fields that are NOT product line items**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
+      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address"), 'purchaseOrderValue', 'salesOrderValue', and 'reason' for the discrepancy.
+
+   **B. Unmatched Product Line Item Discrepancies:**
+      - During your detailed product line item analysis (detailed in section 2 below), you will identify some products as 'PO_ONLY' or 'SO_ONLY'.
+      - For these **unmatched products**, you must also add an entry to this 'discrepancies' array.
+      - For items found in the PO but not in the SO: 'field': "Unmatched PO Product: [Product Name/SKU from PO]", 'purchaseOrderValue': "[Details from PO line item]", 'salesOrderValue': "Not found in SO", 'reason': "Product listed in Purchase Order only."
+      - For items found in the SO but not in the PO: 'field': "Unmatched SO Product: [Product Name/SKU from SO]", 'purchaseOrderValue': "Not found in PO", 'salesOrderValue': "[Details from SO line item]", 'reason': "Product listed in Sales Order only."
+      - **Ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' in section 2 results in a corresponding entry here in section 1B.**
+
+   **C. Matched General Document Fields:**
+      - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Buyer Name, Vendor Name, Order Dates, etc.
 
 **2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
    - Perform a detailed comparison of product line items. For each product line item found in the PO, try to find its corresponding item in the SO (and vice-versa). Strive to find the best possible match for product descriptions, even if there are minor wording differences, acronyms, or variations in item codes/SKUs. Focus on semantic similarity where appropriate.
@@ -122,7 +129,7 @@ Based on your analysis of the document contents, provide the following:
    - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document, this array should be empty.
 
 **3. Summary ('summary' field):**
-   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields, key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched, 1 had quantity mismatch, 1 PO item not in SO"). **If, for any reason (e.g., document length, complexity, unreadable sections), you were unable to process the entirety of either document, you MUST explicitly state this limitation in your summary.**
+   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched, 1 had quantity mismatch, 1 PO item not in SO"). If no general discrepancies (non-product related) were found, explicitly state this. If any limitations were encountered processing the entirety of either document, you MUST explicitly state this limitation in your summary.
 
 **Important Output Structure:**
 - The 'discrepancies' array should always be present. If no general discrepancies are found, it should be an empty array (\`[]\`).
@@ -148,7 +155,7 @@ Ensure all fields in the output schema are populated according to your findings.
       },
       {
         category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-        threshold: 'BLOCK_ONLY_HIGH', 
+        threshold: 'BLOCK_ONLY_HIGH',
       },
     ],
   }
@@ -175,21 +182,23 @@ const compareOrderDetailsFlow = ai.defineFlow(
       return output;
     } catch (error) {
       console.error("Error in compareOrderDetailsFlow: ", error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      let errorMessage = error instanceof Error ? error.message : String(error);
       
-      if (errorMessage.toLowerCase().includes('not found for api version') ||
-          errorMessage.toLowerCase().includes('model not found')) {
-          throw new Error(`The specified AI model is not accessible. Please check the model name and API key permissions. Details: ${errorMessage}`);
+      if (errorMessage.toLowerCase().includes('model not found') || errorMessage.toLowerCase().includes('not found for api version')) {
+          errorMessage = `The specified AI model is not accessible or does not exist. Please check the model name and API key permissions. Details: ${errorMessage}`;
       } else if (errorMessage.includes('CLIENT_ERROR') || 
-          errorMessage.toLowerCase().includes('unsupported mime type') || 
-          errorMessage.toLowerCase().includes('failed to parse content') || 
-          errorMessage.toLowerCase().includes('failed to parse content from bytes') || 
-          errorMessage.toLowerCase().includes('format error') ||
-          errorMessage.toLowerCase().includes('consumer_suspended') || 
-          errorMessage.toLowerCase().includes('permission denied')) { 
-        throw new Error(`The AI model could not process one or both of the documents or there's an issue with API access. Please ensure documents are valid and API key permissions are correct. Details: ${errorMessage}`);
+                 errorMessage.toLowerCase().includes('unsupported mime type') || 
+                 errorMessage.toLowerCase().includes('failed to parse content') || 
+                 errorMessage.toLowerCase().includes('failed to parse content from bytes') || 
+                 errorMessage.toLowerCase().includes('consumer_suspended') || 
+                 errorMessage.toLowerCase().includes('permission denied') ||
+                 errorMessage.toLowerCase().includes('api key not valid') ||
+                 errorMessage.toLowerCase().includes('billing account')) { 
+        errorMessage = `The AI model could not process one or both of the documents, or there's an issue with API access/billing. Please ensure documents are valid, the API key is correct, and your billing account is active. Details: ${errorMessage}`;
+      } else {
+        errorMessage = `The AI model encountered an issue during processing. This could be due to document complexity, content, or a temporary problem. Details: ${errorMessage}. Please try again or use different documents.`;
       }
-      throw new Error(`The AI model encountered an issue during processing. This could be due to document complexity, content, or a temporary problem. Details: ${errorMessage}. Please try again or use different documents.`);
+      throw new Error(errorMessage);
     }
   }
 );
