@@ -103,9 +103,17 @@ Based on your analysis of the document contents, provide the following:
    **B. Unmatched Product Line Item Discrepancies:**
       - During your detailed product line item analysis (detailed in section 2 below), you will identify some products as 'PO_ONLY' or 'SO_ONLY'.
       - For these **unmatched products**, you must also add an entry to this 'discrepancies' array.
-      - For items found in the PO but not in the SO: 'field': "Unmatched PO Product: [Product Name/SKU from PO]", 'purchaseOrderValue': "[Details from PO line item]", 'salesOrderValue': "Not found in SO", 'reason': "Product listed in Purchase Order only."
-      - For items found in the SO but not in the PO: 'field': "Unmatched SO Product: [Product Name/SKU from SO]", 'purchaseOrderValue': "Not found in PO", 'salesOrderValue': "[Details from SO line item]", 'reason': "Product listed in Sales Order only."
-      - **Ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' in section 2 results in a corresponding entry here in section 1B.**
+      - For items found in the PO but not in the SO: 
+        'field': "Unmatched PO Product: [Product Name/SKU from PO line item]", 
+        'purchaseOrderValue': "Desc: [Product Name/SKU from PO line item], Qty: [Quantity from PO line item], Unit Price: [Unit Price from PO line item]", 
+        'salesOrderValue': "Not found in SO", 
+        'reason': "Product listed in Purchase Order only."
+      - For items found in the SO but not in the PO: 
+        'field': "Unmatched SO Product: [Product Name/SKU from SO line item]", 
+        'purchaseOrderValue': "Not found in PO", 
+        'salesOrderValue': "Desc: [Product Name/SKU from SO line item], Qty: [Quantity from SO line item], Unit Price: [Unit Price from SO line item]", 
+        'reason': "Product listed in Sales Order only."
+      - **Critically, ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' in section 2 results in a corresponding entry here in section 1B.**
 
    **C. Matched General Document Fields:**
       - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Buyer Name, Vendor Name, Order Dates, etc.
@@ -203,3 +211,4 @@ const compareOrderDetailsFlow = ai.defineFlow(
   }
 );
 
+    
