@@ -189,6 +189,7 @@ const compareOrderDetailsFlow = ai.defineFlow(
 
       if (!aiPermissiveOutput) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output payload.');
+        // Throw an error that will be caught by the main try/catch block
         throw new Error('AI model failed to return valid comparison data. Please check the documents or try again.');
       }
       
@@ -201,28 +202,17 @@ const compareOrderDetailsFlow = ai.defineFlow(
       };
       
       return finalOutput;
-    } catch (error: any) {
+    } catch (error: unknown) { // Changed 'any' to 'unknown'
       console.error("Error in compareOrderDetailsFlow: ", error);
-      let errorMessage = error instanceof Error ? error.message : String(error);
-      
-      if (errorMessage.toLowerCase().includes('model not found') || 
-          errorMessage.toLowerCase().includes('not found for api version') ||
-          errorMessage.toLowerCase().includes('could not parse model name')) {
-          errorMessage = `The specified AI model is not accessible or does not exist. Please check the model name and API key permissions. Details: ${errorMessage}`;
-      } else if (errorMessage.includes('CLIENT_ERROR') || 
-                 errorMessage.toLowerCase().includes('unsupported mime type') || 
-                 errorMessage.toLowerCase().includes('failed to parse content') || 
-                 errorMessage.toLowerCase().includes('failed to parse content from bytes') || 
-                 errorMessage.toLowerCase().includes('consumer_suspended') || 
-                 errorMessage.toLowerCase().includes('permission denied') ||
-                 errorMessage.toLowerCase().includes('api key not valid') ||
-                 errorMessage.toLowerCase().includes('billing account') ||
-                 errorMessage.toLowerCase().includes('invalid_argument')) { // Catch Zod schema validation errors propagated
-        errorMessage = `The AI model could not process one or both of the documents, there's an issue with API access/billing, or the AI's response was not in the expected format. Please ensure documents are valid, the API key is correct, and your billing account is active. Details: ${errorMessage}`;
-      } else {
-        errorMessage = `The AI model encountered an issue during processing. This could be due to document complexity, content, or a temporary problem. Details: ${errorMessage}. Please try again or use different documents.`;
+      // Re-throw the error to be handled by the server action's catch block.
+      // This simplifies the flow's responsibility regarding error message formatting for the client.
+      if (error instanceof Error) {
+        // If it's already an Error object, re-throw it.
+        // Specific error message construction for client can be handled by the calling server action.
+        throw error;
       }
-      throw new Error(errorMessage);
+      // If it's not an Error object, wrap it in one.
+      throw new Error(String(error));
     }
   }
 );

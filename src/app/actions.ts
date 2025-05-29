@@ -76,20 +76,39 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     });
     return { data: result };
   } catch (e: unknown) {
-    // Log the raw error to the server console first, as this is most reliable for debugging.
-    console.error('SERVER_ACTION_CRITICAL_ERROR comparing orders:', e); 
+    // Log the full error for server-side debugging
+    console.error('SERVER_ACTION_CRITICAL_ERROR comparing orders:', e);
 
-    let clientErrorMessage = 'Comparison failed due to an unexpected server-side error. Please check server logs for full details.';
+    let detailedErrorMessage = 'An unknown error occurred on the server.';
     if (e instanceof Error) {
-        // Try to use the error message directly if it's an Error instance
-        clientErrorMessage = `Comparison Failed: ${e.message.substring(0, 500)}`;
+      detailedErrorMessage = e.message;
+      // Check for specific known error patterns from Google/Genkit
+      const lowerMessage = e.message.toLowerCase();
+      if (lowerMessage.includes('model not found') || lowerMessage.includes('not found for api version') || lowerMessage.includes('could not parse model name')) {
+        detailedErrorMessage = `The specified AI model (${(e as any)?.config?.model || 'unknown model'}) is not accessible or does not exist. Please check the model name and API key permissions. Original error: ${e.message}`;
+      } else if (lowerMessage.includes('consumer_suspended') || lowerMessage.includes('permission denied') || lowerMessage.includes('api key not valid') || lowerMessage.includes('billing account')) {
+        detailedErrorMessage = `There's an issue with your API key or billing: ${e.message}. Please check your Google Cloud project settings.`;
+      } else if (lowerMessage.includes('schema validation failed') || lowerMessage.includes('invalid_argument')) {
+        detailedErrorMessage = `The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
+      } else if (lowerMessage.includes('ai model failed to return valid comparison data')) {
+        detailedErrorMessage = `The AI model did not return any data for comparison. This could be due to very complex documents, or an issue with the AI service. Original error: ${e.message}`;
+      }
     } else if (typeof e === 'string') {
-        clientErrorMessage = `Comparison Failed: ${e.substring(0, 500)}`;
+      detailedErrorMessage = e;
+    } else {
+      try {
+        // Attempt to stringify if it's an object, but be cautious
+        detailedErrorMessage = JSON.stringify(e);
+      } catch (stringifyError) {
+        detailedErrorMessage = 'Could not stringify server error object. Check server logs.';
+      }
     }
-    // For any other type of 'e', the generic message with a timestamp will be used.
-    // This ensures we always return a string in the error field.
-    
-    return { error: clientErrorMessage };
+
+    // Sanitize and cap length for the client-facing message
+    const clientFacingDetail = detailedErrorMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 400); // Increased length slightly
+
+    return {
+      error: `Comparison Failed: ${clientFacingDetail}. Please check server logs if the issue persists.`,
+    };
   }
 }
-
