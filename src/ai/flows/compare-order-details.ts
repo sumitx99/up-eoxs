@@ -26,8 +26,8 @@ export type CompareOrderDetailsInput = z.infer<typeof CompareOrderDetailsInputSc
 
 const DiscrepancySchema = z.object({
   field: z.string().describe('The general document field with a discrepancy (e.g., PO Number, Overall Discount, Payment Terms, or an unmatched product). This is for non-product line items or for flagging products found in one order but not the other.'),
-  purchaseOrderValue: z.string().describe('The value from the purchase order document. For an unmatched SO product, this might be "N/A" or similar.'),
-  salesOrderValue: z.string().describe('The value from the sales order document. For an unmatched PO product, this might be "N/A" or similar.'),
+  purchaseOrderValue: z.string().describe('The value from the purchase order document. For an unmatched SO product, this might be "Desc: [SO Product Description], Qty: [SO Quantity], Unit Price: [SO Unit Price]" or similar if only found in SO, or simply "N/A".'),
+  salesOrderValue: z.string().describe('The value from the sales order document. For an unmatched PO product, this might be "Desc: [PO Product Description], Qty: [PO Quantity], Unit Price: [PO Unit Price]" or similar if only found in PO, or simply "N/A".'),
   reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch (e.g., "Quantities differ", "Product found only in PO").'),
 });
 export type Discrepancy = z.infer<typeof DiscrepancySchema>;
@@ -54,14 +54,23 @@ const ProductLineItemComparisonSchema = z.object({
 });
 export type ProductLineItemComparison = z.infer<typeof ProductLineItemComparisonSchema>;
 
-const CompareOrderDetailsOutputSchema = z.object({
+// Strict schema for the flow's final output and the exported type
+const StrictCompareOrderDetailsOutputSchema = z.object({
   discrepancies: z.array(DiscrepancySchema).describe('An array of general discrepancies found (e.g., for header fields, overall totals, terms, or unmatched products). This should always be an array, even if empty.'),
   matchedItems: z.array(MatchedItemSchema).describe('An array of general items/fields that match (e.g., for header fields). This should always be an array, even if empty. Strive to find matches for common header fields.'),
   productLineItemComparisons: z.array(ProductLineItemComparisonSchema).describe('An array detailing the comparison of each product line item found in the documents. This should always be an array, even if empty.'),
   summary: z.string().describe('A summary of the overall comparison, highlighting key discrepancies, confirmed matches, and product line item findings. If any limitations were encountered processing the entirety of any document, this must be noted here.'),
 });
+export type CompareOrderDetailsOutput = z.infer<typeof StrictCompareOrderDetailsOutputSchema>;
 
-export type CompareOrderDetailsOutput = z.infer<typeof CompareOrderDetailsOutputSchema>;
+// Permissive schema for the AI's direct output, allowing optional top-level array fields
+const AiPermissiveOutputSchema = z.object({
+  discrepancies: z.array(DiscrepancySchema).optional().describe('An array of general discrepancies found (e.g., for header fields, overall totals, terms, or unmatched products).'),
+  matchedItems: z.array(MatchedItemSchema).optional().describe('An array of general items/fields that match (e.g., for header fields). Strive to find matches for common header fields.'),
+  productLineItemComparisons: z.array(ProductLineItemComparisonSchema).optional().describe('An array detailing the comparison of each product line item found in the documents.'),
+  summary: z.string().optional().describe('A summary of the overall comparison, highlighting key discrepancies, confirmed matches, and product line item findings. If any limitations were encountered processing the entirety of any document, this must be noted here.'),
+});
+
 
 export async function compareOrderDetails(input: CompareOrderDetailsInput): Promise<CompareOrderDetailsOutput> {
   return compareOrderDetailsFlow(input);
@@ -73,7 +82,7 @@ const compareOrderDetailsPrompt = ai.definePrompt({
     schema: CompareOrderDetailsInputSchema,
   },
   output: {
-    schema: CompareOrderDetailsOutputSchema,
+    schema: AiPermissiveOutputSchema, // Use permissive schema for AI output
   },
   prompt: `You are an AI assistant specializing in comparing purchase orders (POs) and sales orders (SOs) provided as various document types.
 Your task is to meticulously analyze the **entire content** of both documents, from start to finish, including all pages, headers, footers, and line items.
@@ -92,7 +101,7 @@ Purchase Order Document:
 Sales Order Document:
 {{media url=salesOrder}}
 
-Based on your analysis of the document contents, provide the following:
+Based on your analysis of the document contents, provide the following in a valid JSON format:
 
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
 
@@ -113,7 +122,7 @@ Based on your analysis of the document contents, provide the following:
         'purchaseOrderValue': "Not found in PO", 
         'salesOrderValue': "Desc: [Product Name/SKU from SO line item], Qty: [Quantity from SO line item], Unit Price: [Unit Price from SO line item]", 
         'reason': "Product listed in Sales Order only."
-      - **Critically, ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' in section 2 results in a corresponding entry here in section 1B.**
+      - **Crucially, ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' during the detailed product line item analysis (section 2) results in a corresponding entry in this 'discrepancies' array (section 1).**
 
    **C. Matched General Document Fields:**
       - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Buyer Name, Vendor Name, Order Dates, etc.
@@ -137,14 +146,13 @@ Based on your analysis of the document contents, provide the following:
    - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document, this array should be empty.
 
 **3. Summary ('summary' field):**
-   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched, 1 had quantity mismatch, 1 PO item not in SO"). If no general discrepancies (non-product related) were found, explicitly state this. If any limitations were encountered processing the entirety of either document, you MUST explicitly state this limitation in your summary.
+   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched, 1 had quantity mismatch, 1 PO item not in SO"). If no general, non-product related discrepancies were found, explicitly state this. If any limitations were encountered processing the entirety of either document, you MUST explicitly state this limitation in your summary.
 
 **Important Output Structure:**
-- The 'discrepancies' array should always be present. If no general discrepancies are found, it should be an empty array (\`[]\`).
-- The 'matchedItems' array should always be present. If no general matches are found, it should be an empty array (\`[]\`).
-- The 'productLineItemComparisons' array should always be present. If no product line items are found or compared, it should be an empty array (\`[]\`).
-
-Be thorough, accurate, and **process all provided content from all document types**. If the document content is unreadable, ambiguous, or crucial sections are missing, note this limitation in your summary.
+- The 'discrepancies' array should always be present as a key in the root JSON object. If no general discrepancies are found, its value should be an empty array (\`[]\`).
+- The 'matchedItems' array should always be present as a key in the root JSON object. If no general matches are found, its value should be an empty array (\`[]\`).
+- The 'productLineItemComparisons' array should always be present as a key in the root JSON object. If no product line items are found or compared, its value should be an empty array (\`[]\`).
+- The 'summary' field should always be present as a key in the root JSON object.
 Ensure all fields in the output schema are populated according to your findings.
 `,
   config: {
@@ -173,26 +181,33 @@ const compareOrderDetailsFlow = ai.defineFlow(
   {
     name: 'compareOrderDetailsFlow',
     inputSchema: CompareOrderDetailsInputSchema,
-    outputSchema: CompareOrderDetailsOutputSchema,
+    outputSchema: StrictCompareOrderDetailsOutputSchema, // Flow returns the strict schema
   },
-  async input => {
+  async (input): Promise<CompareOrderDetailsOutput> => {
     try {
-      const {output} = await compareOrderDetailsPrompt(input);
-      if (!output) {
-        console.error('CompareOrderDetailsFlow: AI model returned null or undefined output.');
+      const { output: aiPermissiveOutput } = await compareOrderDetailsPrompt(input);
+
+      if (!aiPermissiveOutput) {
+        console.error('CompareOrderDetailsFlow: AI model returned null or undefined output payload.');
         throw new Error('AI model failed to return valid comparison data. Please check the documents or try again.');
       }
-      // Ensure arrays are always present
-      output.matchedItems = Array.isArray(output.matchedItems) ? output.matchedItems : [];
-      output.discrepancies = Array.isArray(output.discrepancies) ? output.discrepancies : [];
-      output.productLineItemComparisons = Array.isArray(output.productLineItemComparisons) ? output.productLineItemComparisons : [];
       
-      return output;
-    } catch (error) {
+      // Construct the final output, ensuring all required fields are present and correctly typed.
+      const finalOutput: CompareOrderDetailsOutput = {
+        discrepancies: Array.isArray(aiPermissiveOutput.discrepancies) ? aiPermissiveOutput.discrepancies : [],
+        matchedItems: Array.isArray(aiPermissiveOutput.matchedItems) ? aiPermissiveOutput.matchedItems : [],
+        productLineItemComparisons: Array.isArray(aiPermissiveOutput.productLineItemComparisons) ? aiPermissiveOutput.productLineItemComparisons : [],
+        summary: typeof aiPermissiveOutput.summary === 'string' ? aiPermissiveOutput.summary : 'AI did not provide a summary for this comparison.',
+      };
+      
+      return finalOutput;
+    } catch (error: any) {
       console.error("Error in compareOrderDetailsFlow: ", error);
       let errorMessage = error instanceof Error ? error.message : String(error);
       
-      if (errorMessage.toLowerCase().includes('model not found') || errorMessage.toLowerCase().includes('not found for api version')) {
+      if (errorMessage.toLowerCase().includes('model not found') || 
+          errorMessage.toLowerCase().includes('not found for api version') ||
+          errorMessage.toLowerCase().includes('could not parse model name')) {
           errorMessage = `The specified AI model is not accessible or does not exist. Please check the model name and API key permissions. Details: ${errorMessage}`;
       } else if (errorMessage.includes('CLIENT_ERROR') || 
                  errorMessage.toLowerCase().includes('unsupported mime type') || 
@@ -201,8 +216,9 @@ const compareOrderDetailsFlow = ai.defineFlow(
                  errorMessage.toLowerCase().includes('consumer_suspended') || 
                  errorMessage.toLowerCase().includes('permission denied') ||
                  errorMessage.toLowerCase().includes('api key not valid') ||
-                 errorMessage.toLowerCase().includes('billing account')) { 
-        errorMessage = `The AI model could not process one or both of the documents, or there's an issue with API access/billing. Please ensure documents are valid, the API key is correct, and your billing account is active. Details: ${errorMessage}`;
+                 errorMessage.toLowerCase().includes('billing account') ||
+                 errorMessage.toLowerCase().includes('invalid_argument')) { // Catch Zod schema validation errors propagated
+        errorMessage = `The AI model could not process one or both of the documents, there's an issue with API access/billing, or the AI's response was not in the expected format. Please ensure documents are valid, the API key is correct, and your billing account is active. Details: ${errorMessage}`;
       } else {
         errorMessage = `The AI model encountered an issue during processing. This could be due to document complexity, content, or a temporary problem. Details: ${errorMessage}. Please try again or use different documents.`;
       }
@@ -210,5 +226,4 @@ const compareOrderDetailsFlow = ai.defineFlow(
     }
   }
 );
-
-    
+ 
