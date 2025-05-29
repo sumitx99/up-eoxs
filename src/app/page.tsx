@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, Search, Workflow } from 'lucide-react';
+import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, Search, Workflow, AlertCircle } from 'lucide-react';
 import { compareOrdersAction, fetchSalesOrderAction } from './actions';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
@@ -37,7 +37,6 @@ interface FetchedSalesOrder {
 
 export default function OrderComparatorPage() {
   const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
-  const [salesOrderSequence, setSalesOrderSequence] = useState<string>('');
   const [fetchedSalesOrder, setFetchedSalesOrder] = useState<FetchedSalesOrder | null>(null);
   const [isFetchingSO, setIsFetchingSO] = useState(false);
 
@@ -99,19 +98,15 @@ export default function OrderComparatorPage() {
   };
 
   const handleFetchSalesOrder = async () => {
-    if (!salesOrderSequence.trim()) {
-      setSoFetchError("Please enter a Sales Order sequence number.");
-      toast({ variant: "destructive", title: "Missing SO Sequence", description: "Please enter a Sales Order sequence number." });
-      return;
-    }
     setIsFetchingSO(true);
     setSoFetchError(null);
     setFetchedSalesOrder(null);
 
-    const result = await fetchSalesOrderAction(salesOrderSequence);
+    // The action now uses a hardcoded SO sequence
+    const result = await fetchSalesOrderAction(); 
     if (result.dataUri && result.fileName) {
       setFetchedSalesOrder({ name: result.fileName, dataUri: result.dataUri, size: result.fileSize });
-      toast({ title: "Sales Order Fetched", description: `Successfully fetched ${result.fileName}.` });
+      toast({ title: "Sales Order Fetched", description: `Successfully fetched ${result.fileName} for sequence 'SO - 10379'.` });
     } else if (result.error) {
       setSoFetchError(result.error);
       toast({ variant: "destructive", title: "Failed to Fetch SO", description: result.error });
@@ -135,14 +130,14 @@ export default function OrderComparatorPage() {
     if (!fetchedSalesOrder) {
       setError("Please fetch the Sales Order document.");
       setIsLoading(false);
-      toast({ variant: "destructive", title: "Missing SO Document", description: "Please fetch the Sales Order document using its sequence number." });
+      toast({ variant: "destructive", title: "Missing SO Document", description: "Please fetch the Sales Order document using the 'Fetch SO PDF' button." });
       return;
     }
 
     const formData = new FormData();
     formData.append('purchaseOrder', purchaseOrderFile);
-    formData.append('salesOrderDataUri', fetchedSalesOrder.dataUri); // Send data URI
-    formData.append('salesOrderName', fetchedSalesOrder.name); // Send name for potential use
+    formData.append('salesOrderDataUri', fetchedSalesOrder.dataUri);
+    formData.append('salesOrderName', fetchedSalesOrder.name);
 
     const result = await compareOrdersAction(formData);
 
@@ -207,13 +202,12 @@ export default function OrderComparatorPage() {
                     Input Order Documents
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    Upload Purchase Order and fetch Sales Order by its sequence number.
+                    Upload Purchase Order and fetch Sales Order (SO - 10379) by clicking the button.
                   </p>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-0">
                 <Card className="shadow-none border-0 rounded-t-none">
-                  {/* Main form now only wraps the comparison button if SO fetch is separate */}
                   <CardContent className="space-y-6 pt-6">
                     <div className="space-y-2">
                       <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
@@ -235,31 +229,20 @@ export default function OrderComparatorPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="salesOrderSequence" className="text-lg font-medium">Sales Order Sequence</Label>
-                      <div className="flex items-center space-x-2">
-                        <Input
-                          id="salesOrderSequence"
-                          type="text"
-                          placeholder="e.g., SO - 10379"
-                          value={salesOrderSequence}
-                          onChange={(e) => setSalesOrderSequence(e.target.value)}
-                          className="w-full focus:ring-primary focus:border-primary"
-                          disabled={isLoading || isFetchingSO}
-                        />
-                        <Button 
-                          type="button" 
-                          onClick={handleFetchSalesOrder} 
-                          disabled={isLoading || isFetchingSO || !salesOrderSequence.trim()}
-                          className="whitespace-nowrap"
-                        >
-                          {isFetchingSO ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Search className="mr-2 h-4 w-4" />
-                          )}
-                          Fetch SO PDF
-                        </Button>
-                      </div>
+                      <Label className="text-lg font-medium">Sales Order Document (SO - 10379)</Label>
+                      <Button 
+                        type="button" 
+                        onClick={handleFetchSalesOrder} 
+                        disabled={isLoading || isFetchingSO}
+                        className="w-full whitespace-nowrap"
+                      >
+                        {isFetchingSO ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="mr-2 h-4 w-4" />
+                        )}
+                        Fetch SO PDF for 'SO - 10379'
+                      </Button>
                        {soFetchError && <p className="text-sm text-red-500 mt-1">{soFetchError}</p>}
                        {fetchedSalesOrder && (
                         <p className="text-sm text-muted-foreground flex items-center mt-2">
@@ -502,3 +485,4 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
+
