@@ -1,4 +1,3 @@
-
 // src/app/page.tsx
 'use client';
 
@@ -10,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, AlertCircle, Workflow, FileType, Search } from 'lucide-react';
+import { Loader2, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, AlertCircle, Workflow, FileType, Search, Scale } from 'lucide-react';
 import { compareOrdersAction } from './actions';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
@@ -101,7 +100,7 @@ export default function OrderComparatorPage() {
 
     const formData = new FormData();
     formData.append('purchaseOrderFile', purchaseOrderFile);
-    formData.append('salesOrderName', salesOrderName.trim());
+    formData.append('salesOrderName', salesOrderName.trim()); // User's input for SO name
 
     const result = await compareOrdersAction(formData);
 

@@ -98,11 +98,12 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
     throw new Error(`Odoo XML-RPC authentication failed. Original error: ${error instanceof Error ? error.message : String(error)}`);
   }
 
+  // Use the dynamically provided soName for searching the Sales Order
   const sales: any[] = await new Promise((resolve, reject) => {
     modelsClient.methodCall('execute_kw', [
       odooDb, uid, odooPassword,
       'sale.order', 'search_read',
-      [[['name', 'ilike', soName]]],
+      [[['name', 'ilike', soName]]], // Use soName parameter here
       { fields: ['id', 'name'], limit: 1 }
     ], (error, value) => {
       if (error) {
@@ -118,7 +119,7 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
   }
   const saleOrder = sales[0];
   const saleId = saleOrder.id;
-  const saleName = saleOrder.name;
+  const saleName = saleOrder.name; // This is the actual name found, e.g., "SO - 10379"
 
   // Use axios with cookie jar support for session management
   const jar = new CookieJar();
@@ -140,7 +141,6 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
       headers: { 'Content-Type': 'application/json' }
     });
     console.log('Odoo HTTP Login Response Status:', loginResponse.status);
-    // console.log('Odoo HTTP Login Response Data:', loginResponse.data); // Be careful logging sensitive data
   } catch (err: any) {
     console.error('Odoo HTTP Login Request Error - Status:', err.response?.status, 'Data:', err.response?.data);
     const errorDetail = err.response?.data?.error?.message || err.message || 'Unknown login error';
@@ -195,14 +195,14 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
   
   return {
     dataUri,
-    name: `${saleName}.pdf`.replace(/[\/\s]+/g, '_'),
+    name: `${saleName}.pdf`.replace(/[\/\s]+/g, '_'), // Use the actual found saleName for the filename
     size: pdfBuffer.length,
   };
 }
 
 export async function compareOrdersAction(formData: FormData): Promise<CompareOrdersResult> {
   const purchaseOrderFile = formData.get('purchaseOrderFile') as File | null;
-  const salesOrderName = formData.get('salesOrderName') as string | null;
+  const salesOrderName = formData.get('salesOrderName') as string | null; // This comes from user input
 
   if (!purchaseOrderFile) {
     return { error: 'Purchase Order document is required.' };
@@ -220,6 +220,7 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     const purchaseOrderDataUri = await fileToDataUri(purchaseOrderFile);
     
     console.log(`Fetching Sales Order PDF for: ${salesOrderName}`);
+    // Pass the user-provided salesOrderName to the fetch function
     const salesOrderDetails = await fetchSalesOrderPdfFromOdoo(salesOrderName.trim());
     console.log(`Successfully fetched Sales Order PDF: ${salesOrderDetails.name}, Size: ${salesOrderDetails.size} bytes`);
 
@@ -236,6 +237,9 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
   } catch (e: unknown) {
     let clientFacingMessage = "An unexpected error occurred on the server while comparing orders.";
     let logMessage = "SERVER_ACTION_CRITICAL_ERROR comparing orders:";
+    
+    console.error("Full error object in compareOrdersAction catch:", e);
+
 
     if (e instanceof Error) {
         clientFacingMessage = e.message; 
@@ -259,19 +263,25 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
         } else if (e.message.toLowerCase().includes("schema validation failed") || e.message.toLowerCase().includes("invalid_argument")) {
            clientFacingMessage = `AI Data Error: The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
         } else if (e.message.toLowerCase().includes("ai model encountered an issue during processing")) {
-            clientFacingMessage = e.message; 
+            // This is the specific message from the refined Genkit flow
+            clientFacingMessage = e.message; // Use it directly
+        } else if (e.message.toLowerCase().includes("ai model failed to return valid comparison data")) {
+            // This is also a specific message from the Genkit flow
+            clientFacingMessage = e.message;
         }
     } else if (typeof e === 'string') {
         clientFacingMessage = e;
         logMessage = `SERVER_ACTION_ERROR (string) in compareOrdersAction: ${e}`;
     } else {
+        // Fallback for unknown error types
         logMessage = `SERVER_ACTION_ERROR (unknown type) in compareOrdersAction: ${String(e)}`;
+        clientFacingMessage = "An unknown server error occurred.";
     }
     
     console.error(logMessage, e); 
 
     // Sanitize and cap length for client-facing message
-    const finalClientMessage = `Failed to compare orders. ${clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500)}`;
+    const finalClientMessage = `Comparison Failed: ${clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500)}`;
     
     return {
         error: `${finalClientMessage} Please check server logs if the issue persists.`,
