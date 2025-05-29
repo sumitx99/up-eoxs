@@ -38,6 +38,7 @@ async function fileToDataUri(file: File): Promise<string> {
   const base64 = Buffer.from(buffer).toString('base64');
   let mimeType = file.type;
 
+  // Ensure MIME type is correctly set for CSV/Excel if not auto-detected
   if ((file.name.toLowerCase().endsWith('.csv') && !mimeType) || (mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.csv'))) {
     mimeType = 'text/csv';
   } else if ((file.name.toLowerCase().endsWith('.xls') && !mimeType) || (mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xls'))) {
@@ -63,33 +64,47 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
   const modelsClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
 
   // 1. XML-RPC Authenticate
-  const uid: number = await new Promise((resolve, reject) => {
-    commonClient.methodCall('authenticate', [odooDb, odooUsername, odooPassword, {}], (error, value) => {
-      if (error) {
-        console.error('Odoo XML-RPC Auth Error:', error);
-        return reject(new Error('Odoo XML-RPC authentication failed.'));
-      }
-      if (!value) {
-        console.error('Odoo XML-RPC Auth Failed: No UID returned. Credentials:', { odooUsername, odooDb, odooUrlProvided: !!odooUrl, odooPasswordProvided: !!odooPassword });
-        return reject(new Error('Odoo XML-RPC authentication failed (no UID). Check server credentials and Odoo logs.'));
-      }
-      resolve(value);
+  let uid: number;
+  try {
+    uid = await new Promise((resolve, reject) => {
+      commonClient.methodCall('authenticate', [odooDb, odooUsername, odooPassword, {}], (error, value) => {
+        if (error) {
+          console.error('Odoo XML-RPC Auth Error:', {
+            message: error.message,
+            // details: error, // Avoid logging potentially sensitive details from full error object
+            urlAttempted: `${odooUrl}/xmlrpc/2/common`,
+            dbUsed: odooDb,
+            usernameUsed: odooUsername,
+          });
+          return reject(new Error('Odoo XML-RPC authentication failed.'));
+        }
+        if (!value) {
+          console.error('Odoo XML-RPC Auth Failed: No UID returned. Credentials:', { odooUsername, odooDb, odooUrlProvided: !!odooUrl, odooPasswordProvided: !!odooPassword });
+          return reject(new Error('Odoo XML-RPC authentication failed (no UID). Check server credentials and Odoo logs.'));
+        }
+        resolve(value as number);
+      });
     });
-  });
+  } catch (error) {
+    // Log the specific error and re-throw a user-friendly one
+    console.error('Caught error during XML-RPC authentication promise:', error);
+    throw new Error('Odoo XML-RPC authentication failed. Please verify server configuration and Odoo accessibility.');
+  }
+
 
   // 2. Find Sale Order by name
   const sales: any[] = await new Promise((resolve, reject) => {
     modelsClient.methodCall('execute_kw', [
       odooDb, uid, odooPassword,
       'sale.order', 'search_read',
-      [[['name', 'ilike', soName]]],
+      [[['name', 'ilike', soName]]], // Use soName from input
       { fields: ['id', 'name'], limit: 1 }
     ], (error, value) => {
       if (error) {
         console.error('Odoo Find SO Error:', error);
         return reject(new Error(`Error finding Sales Order '${soName}' in Odoo.`));
       }
-      resolve(value);
+      resolve(value as any[]);
     });
   });
 
@@ -98,7 +113,7 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
   }
   const saleOrder = sales[0];
   const saleId = saleOrder.id;
-  const saleName = saleOrder.name;
+  const saleName = saleOrder.name; // Use the name confirmed from Odoo
 
   // 3. HTTP Login to get session cookies
   const axiosInstance = axios.create(); // Create an instance to manage cookies
@@ -132,6 +147,7 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
   try {
     pdfResponse = await axiosInstance.get(reportUrl, {
       responseType: 'arraybuffer', // Important to get binary data
+      // Cookies should be automatically handled by the axiosInstance
     });
   } catch (err: any) {
     console.error('Odoo PDF Fetch Error:', err.response?.data ? Buffer.from(err.response.data).toString() : err.message); // Log response if text
@@ -150,7 +166,7 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
   
   return {
     dataUri,
-    name: `${saleName}.pdf`.replace(/[\/\s]+/g, '_'), // Sanitize filename
+    name: `${saleName}.pdf`.replace(/[\/\s]+/g, '_'), // Sanitize filename based on actual SO name
     size: pdfBuffer.length,
   };
 }
@@ -158,7 +174,7 @@ async function fetchSalesOrderPdfFromOdoo(soName: string): Promise<{ dataUri: st
 
 export async function compareOrdersAction(formData: FormData): Promise<CompareOrdersResult> {
   const purchaseOrderFile = formData.get('purchaseOrderFile') as File | null;
-  const salesOrderName = formData.get('salesOrderName') as string | null;
+  const salesOrderName = formData.get('salesOrderName') as string | null; // SO Name from user input
 
   if (!purchaseOrderFile) {
     return { error: 'Purchase Order document is required.' };
@@ -190,7 +206,7 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     let clientFacingMessage = "An unexpected error occurred on the server while comparing orders.";
 
     if (e instanceof Error) {
-        clientFacingMessage = e.message;
+        clientFacingMessage = e.message; // Start with the original error message
         // Customize messages for known error types
         if (e.message.toLowerCase().includes("authentication failed") || e.message.toLowerCase().includes("login failed")) {
             clientFacingMessage = `Odoo Authentication Failed: ${e.message}. Please check server credentials for Odoo.`;
@@ -199,16 +215,19 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
         } else if (e.message.toLowerCase().includes("failed to download pdf")) {
             clientFacingMessage = `Odoo PDF Fetch Error: ${e.message}. The report might not exist or there was an issue generating it.`;
         } else if (e.message.toLowerCase().includes("model not found") || e.message.toLowerCase().includes("not found for api version")) {
+            // This specific error for AI model issues.
             clientFacingMessage = `AI Model Error: The specified AI model is not accessible or does not exist. Original error: ${e.message}`;
         } else if (e.message.toLowerCase().includes("consumer_suspended") || e.message.toLowerCase().includes("permission denied") || e.message.toLowerCase().includes("api key not valid")) {
             clientFacingMessage = `AI Service Error: Issue with API key or billing: ${e.message}. Check Google Cloud settings.`;
         } else if (e.message.toLowerCase().includes("schema validation failed") || e.message.toLowerCase().includes("invalid_argument")) {
+           // More specific error for AI schema issues or unprocessable documents
            clientFacingMessage = `AI Data Error: The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
         }
     } else if (typeof e === 'string') {
         clientFacingMessage = e;
     }
     
+    // Sanitize and cap the length of the message being sent to the client
     const finalClientMessage = `Failed to compare orders. ${clientFacingMessage}`.replace(/[^\x20-\x7E]/g, '').substring(0, 500);
     
     return {

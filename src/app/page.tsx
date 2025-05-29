@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, AlertCircle, Workflow, FileType } from 'lucide-react';
+import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, AlertCircle, Workflow, FileType, Search } from 'lucide-react';
 import { compareOrdersAction } from './actions';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
@@ -32,7 +32,7 @@ const ACCEPTED_PO_EXTENSIONS_STRING = ".pdf, image/jpeg, image/png, image/webp, 
 
 export default function OrderComparatorPage() {
   const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
-  const [salesOrderName, setSalesOrderName] = useState<string>(''); // For SO Name/Sequence
+  const [salesOrderName, setSalesOrderName] = useState<string>(''); // For SO Name/Sequence to fetch
 
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,10 +45,10 @@ export default function OrderComparatorPage() {
     if (!file) return <UploadCloud className="h-4 w-4 mr-2 text-muted-foreground" />;
     
     let mimeType = file.type;
-    let fileName = file.name;
+    let fileName = file.name.toLowerCase();
 
     if (mimeType.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-primary" />;
-    if (mimeType === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-red-600" />;
+    if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) return <FileText className="h-4 w-4 mr-2 text-red-600" />;
     if (mimeType === "text/csv" || fileName.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />;
     if (mimeType.includes("excel") || mimeType.includes("spreadsheetml") || fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700" />;
     return <FileType className="h-4 w-4 mr-2 text-gray-500" />;
@@ -93,7 +93,7 @@ export default function OrderComparatorPage() {
       return;
     }
     if (!salesOrderName.trim()) {
-      setError("Please enter the Sales Order name/sequence.");
+      setError("Please enter the Sales Order name/sequence to fetch its PDF.");
       setIsLoading(false);
       toast({ variant: "destructive", title: "Missing Sales Order Name", description: "Please enter the Sales Order name or sequence number to fetch its PDF." });
       return;
@@ -199,7 +199,7 @@ export default function OrderComparatorPage() {
                         <Input
                           id="salesOrderName"
                           type="text"
-                          placeholder="e.g., SO - 10379"
+                          placeholder="e.g., SO - 10372"
                           value={salesOrderName}
                           onChange={(e) => setSalesOrderName(e.target.value)}
                           className="w-full focus:ring-primary focus:border-primary"
@@ -299,7 +299,7 @@ export default function OrderComparatorPage() {
                         ) : (
                           <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No General Matched Fields</AlertTitle>
+                            <AlertTitle className="text-base">No General Matched Fields Identified.</AlertTitle>
                             <AlertDescription>The AI did not find any general fields that match between the two documents.</AlertDescription>
                           </Alert>
                         )}
@@ -350,7 +350,7 @@ export default function OrderComparatorPage() {
                         ) : (
                            <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No General Discrepancies Found</AlertTitle>
+                            <AlertTitle className="text-base">No General Discrepancies Found.</AlertTitle>
                             <AlertDescription>The AI did not find any general discrepancies between the two documents.</AlertDescription>
                           </Alert>
                         )}
