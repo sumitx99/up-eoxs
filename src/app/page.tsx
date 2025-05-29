@@ -10,14 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, CheckCircle2, AlertCircle, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp } from 'lucide-react';
-import { compareOrdersAction } from './actions';
+import { Loader2, Scale, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, Search, Workflow } from 'lucide-react';
+import { compareOrdersAction, fetchSalesOrderAction } from './actions';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-const ALLOWED_FILE_TYPES = [
+const ALLOWED_FILE_TYPES_UPLOAD = [
   "application/pdf",
   "image/jpeg",
   "image/png",
@@ -29,51 +29,96 @@ const ALLOWED_FILE_TYPES = [
 
 const ACCEPTED_EXTENSIONS_STRING = ".pdf, image/jpeg, image/png, image/webp, .csv, .xls, .xlsx";
 
+interface FetchedSalesOrder {
+  name: string;
+  dataUri: string;
+  size?: number; // in bytes
+}
+
 export default function OrderComparatorPage() {
   const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
-  const [salesOrderFile, setSalesOrderFile] = useState<File | null>(null);
+  const [salesOrderSequence, setSalesOrderSequence] = useState<string>('');
+  const [fetchedSalesOrder, setFetchedSalesOrder] = useState<FetchedSalesOrder | null>(null);
+  const [isFetchingSO, setIsFetchingSO] = useState(false);
+
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [soFetchError, setSoFetchError] = useState<string | null>(null);
 
   const purchaseOrderRef = useRef<HTMLInputElement>(null);
-  const salesOrderRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const getFileIcon = (file: File | null) => {
+  const getFileIcon = (file: File | null | FetchedSalesOrder) => {
     if (!file) return <UploadCloud className="h-4 w-4 mr-2 text-muted-foreground" />;
-    if (file.type.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-primary" />;
-    if (file.type === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-red-600" />;
-    if (file.type === "text/csv" || file.name.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />;
-    if (file.type.includes("excel") || file.type.includes("spreadsheetml") || file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700" />;
+    
+    let mimeType = '';
+    let fileName = '';
+
+    if (file instanceof File) {
+        mimeType = file.type;
+        fileName = file.name;
+    } else if (file && 'dataUri' in file) { // FetchedSalesOrder
+        const match = file.dataUri.match(/^data:(.+?);base64,/);
+        mimeType = match ? match[1] : 'application/octet-stream';
+        fileName = file.name;
+    }
+
+
+    if (mimeType.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-primary" />;
+    if (mimeType === "application/pdf") return <FileText className="h-4 w-4 mr-2 text-red-600" />;
+    if (mimeType === "text/csv" || fileName.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />;
+    if (mimeType.includes("excel") || mimeType.includes("spreadsheetml") || fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700" />;
     return <FileText className="h-4 w-4 mr-2 text-gray-500" />;
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, setFile: React.Dispatch<React.SetStateAction<File | null>>) => {
+  const handlePOFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       const isValidExtension = fileExtension && ['pdf', 'jpeg', 'jpg', 'png', 'webp', 'csv', 'xls', 'xlsx'].includes(fileExtension);
-      const isValidMime = ALLOWED_FILE_TYPES.includes(file.type);
+      const isValidMime = ALLOWED_FILE_TYPES_UPLOAD.includes(file.type);
       
       if (isValidMime || isValidExtension) {
-        setFile(file);
+        setPurchaseOrderFile(file);
         setError(null); 
       } else {
         toast({
           variant: "destructive",
-          title: "Invalid File Type",
+          title: "Invalid PO File Type",
           description: `Unsupported file: ${file.name}. Please upload PDF, Image (JPEG, PNG, WebP), CSV, or Excel (.xls, .xlsx). Type detected: ${file.type || `.${fileExtension}` || 'unknown'}.`,
         });
-        setFile(null);
+        setPurchaseOrderFile(null);
         if (event.target) {
           event.target.value = ""; 
         }
       }
     } else {
-      setFile(null);
+      setPurchaseOrderFile(null);
     }
   };
+
+  const handleFetchSalesOrder = async () => {
+    if (!salesOrderSequence.trim()) {
+      setSoFetchError("Please enter a Sales Order sequence number.");
+      toast({ variant: "destructive", title: "Missing SO Sequence", description: "Please enter a Sales Order sequence number." });
+      return;
+    }
+    setIsFetchingSO(true);
+    setSoFetchError(null);
+    setFetchedSalesOrder(null);
+
+    const result = await fetchSalesOrderAction(salesOrderSequence);
+    if (result.dataUri && result.fileName) {
+      setFetchedSalesOrder({ name: result.fileName, dataUri: result.dataUri, size: result.fileSize });
+      toast({ title: "Sales Order Fetched", description: `Successfully fetched ${result.fileName}.` });
+    } else if (result.error) {
+      setSoFetchError(result.error);
+      toast({ variant: "destructive", title: "Failed to Fetch SO", description: result.error });
+    }
+    setIsFetchingSO(false);
+  };
+
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -81,20 +126,23 @@ export default function OrderComparatorPage() {
     setError(null);
     setComparisonResult(null);
 
-    if (!purchaseOrderFile || !salesOrderFile) {
-      setError("Please upload both purchase order and sales order documents.");
+    if (!purchaseOrderFile) {
+      setError("Please upload a Purchase Order document.");
       setIsLoading(false);
-      toast({
-        variant: "destructive",
-        title: "Missing Files",
-        description: "Please upload both documents to compare.",
-      });
+      toast({ variant: "destructive", title: "Missing PO Document", description: "Please upload the Purchase Order document." });
+      return;
+    }
+    if (!fetchedSalesOrder) {
+      setError("Please fetch the Sales Order document.");
+      setIsLoading(false);
+      toast({ variant: "destructive", title: "Missing SO Document", description: "Please fetch the Sales Order document using its sequence number." });
       return;
     }
 
     const formData = new FormData();
     formData.append('purchaseOrder', purchaseOrderFile);
-    formData.append('salesOrder', salesOrderFile);
+    formData.append('salesOrderDataUri', fetchedSalesOrder.dataUri); // Send data URI
+    formData.append('salesOrderName', fetchedSalesOrder.name); // Send name for potential use
 
     const result = await compareOrdersAction(formData);
 
@@ -159,65 +207,82 @@ export default function OrderComparatorPage() {
                     Input Order Documents
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    Upload your purchase order and sales order documents (PDF, Image, CSV, Excel).
+                    Upload Purchase Order and fetch Sales Order by its sequence number.
                   </p>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-0">
                 <Card className="shadow-none border-0 rounded-t-none">
+                  {/* Main form now only wraps the comparison button if SO fetch is separate */}
+                  <CardContent className="space-y-6 pt-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
+                          <Input
+                            id="purchaseOrder"
+                            type="file"
+                            accept={ACCEPTED_EXTENSIONS_STRING}
+                            ref={purchaseOrderRef}
+                            onChange={handlePOFileChange}
+                            className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                            required
+                            disabled={isLoading || isFetchingSO}
+                          />
+                      {purchaseOrderFile && (
+                        <p className="text-sm text-muted-foreground flex items-center mt-2">
+                          {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="salesOrderSequence" className="text-lg font-medium">Sales Order Sequence</Label>
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          id="salesOrderSequence"
+                          type="text"
+                          placeholder="e.g., SO - 10379"
+                          value={salesOrderSequence}
+                          onChange={(e) => setSalesOrderSequence(e.target.value)}
+                          className="w-full focus:ring-primary focus:border-primary"
+                          disabled={isLoading || isFetchingSO}
+                        />
+                        <Button 
+                          type="button" 
+                          onClick={handleFetchSalesOrder} 
+                          disabled={isLoading || isFetchingSO || !salesOrderSequence.trim()}
+                          className="whitespace-nowrap"
+                        >
+                          {isFetchingSO ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Search className="mr-2 h-4 w-4" />
+                          )}
+                          Fetch SO PDF
+                        </Button>
+                      </div>
+                       {soFetchError && <p className="text-sm text-red-500 mt-1">{soFetchError}</p>}
+                       {fetchedSalesOrder && (
+                        <p className="text-sm text-muted-foreground flex items-center mt-2">
+                          {getFileIcon(fetchedSalesOrder)} Fetched: {fetchedSalesOrder.name} ({fetchedSalesOrder.size ? Math.round(fetchedSalesOrder.size / 1024) : 'N/A'} KB)
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
                   <form onSubmit={handleSubmit}>
-                    <CardContent className="space-y-6 pt-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
-                            <Input
-                              id="purchaseOrder"
-                              type="file"
-                              accept={ACCEPTED_EXTENSIONS_STRING}
-                              ref={purchaseOrderRef}
-                              onChange={(e) => handleFileChange(e, setPurchaseOrderFile)}
-                              className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                              required
-                              disabled={isLoading}
-                            />
-                        {purchaseOrderFile && (
-                          <p className="text-sm text-muted-foreground flex items-center mt-2">
-                            {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="salesOrder" className="text-lg font-medium">Sales Order Document</Label>
-                            <Input
-                              id="salesOrder"
-                              type="file"
-                              accept={ACCEPTED_EXTENSIONS_STRING}
-                              ref={salesOrderRef}
-                              onChange={(e) => handleFileChange(e, setSalesOrderFile)}
-                              className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                              required
-                              disabled={isLoading}
-                            />
-                        {salesOrderFile && (
-                          <p className="text-sm text-muted-foreground flex items-center mt-2">
-                            {getFileIcon(salesOrderFile)} Selected: {salesOrderFile.name} ({Math.round(salesOrderFile.size / 1024)} KB)
-                          </p>
-                        )}
-                      </div>
-                    </CardContent>
                     <CardFooter>
-                      <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || !purchaseOrderFile || !salesOrderFile}>
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                            Comparing Documents...
-                          </>
-                        ) : (
-                          <>
-                            <UploadCloud className="mr-2 h-5 w-5" />
-                            Compare Order Documents
-                          </>
-                        )}
-                      </Button>
+                        <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || isFetchingSO || !purchaseOrderFile || !fetchedSalesOrder}>
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              Comparing Documents...
+                            </>
+                          ) : (
+                            <>
+                              <Workflow className="mr-2 h-5 w-5" />
+                              Compare Order Documents
+                            </>
+                          )}
+                        </Button>
                     </CardFooter>
                   </form>
                 </Card>
@@ -304,8 +369,8 @@ export default function OrderComparatorPage() {
                     <AccordionItem value="discrepancies">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                          <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> 
-                          General Discrepancies ({comparisonResult.discrepancies?.length || 0})
+                           <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> 
+                           General Discrepancies ({comparisonResult.discrepancies?.length || 0})
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
@@ -343,7 +408,7 @@ export default function OrderComparatorPage() {
                             </Table>
                           </div>
                         ) : (
-                          <Alert variant="default" className="mt-2 text-sm">
+                           <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
                             <AlertTitle className="text-base">No General Discrepancies Found</AlertTitle>
                             <AlertDescription>The AI did not find any general discrepancies between the two documents.</AlertDescription>
@@ -418,7 +483,7 @@ export default function OrderComparatorPage() {
               {!isLoading && !error && !comparisonResult && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <UploadCloud className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Upload documents to see the comparison results.</p>
+                  <p className="text-lg">Upload PO and fetch SO to see the comparison results.</p>
                   <p className="text-sm">The AI will analyze their content to find discrepancies and matching details.</p>
                 </div>
               )}
@@ -437,5 +502,3 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
-
-    
