@@ -3,19 +3,10 @@
 'use server';
 
 import { compareOrderDetails, type CompareOrderDetailsOutput } from '@/ai/flows/compare-order-details';
-import xmlrpc from 'xmlrpc';
-import type { Client } from 'xmlrpc';
 
 interface CompareOrdersResult {
   data?: CompareOrderDetailsOutput;
   error?: string;
-}
-
-interface FetchedSalesOrderResult {
-  fileName?: string;
-  dataUri?: string;
-  error?: string;
-  fileSize?: number;
 }
 
 const ALLOWED_MIME_TYPES_UPLOAD = [
@@ -33,6 +24,7 @@ function isValidFileType(file: File): boolean {
   if (ALLOWED_MIME_TYPES_UPLOAD.includes(file.type)) {
     return true;
   }
+  // Fallback for browsers that might not report MIME type correctly for CSV/Excel
   const fileName = file.name.toLowerCase();
   if (fileName.endsWith('.csv') || fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
     return true;
@@ -44,139 +36,47 @@ async function fileToDataUri(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');
   let mimeType = file.type;
-  if ((file.name.toLowerCase().endsWith('.csv') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.csv')) {
+
+  // Attempt to infer MIME type from extension if browser provides a generic one
+  if ((file.name.toLowerCase().endsWith('.csv') && !mimeType) || (mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.csv'))) {
     mimeType = 'text/csv';
-  } else if ((file.name.toLowerCase().endsWith('.xls') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xls')) {
+  } else if ((file.name.toLowerCase().endsWith('.xls') && !mimeType) || (mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xls'))) {
     mimeType = 'application/vnd.ms-excel';
-  } else if ((file.name.toLowerCase().endsWith('.xlsx') && !mimeType) || mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xlsx')) {
+  } else if ((file.name.toLowerCase().endsWith('.xlsx') && !mimeType) || (mimeType === 'application/octet-stream' && file.name.toLowerCase().endsWith('.xlsx'))) {
     mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   }
   return `data:${mimeType || 'application/octet-stream'};base64,${base64}`;
 }
 
-
-// Odoo Connection Details from Environment Variables
-const odooUrl = process.env.ODOO_URL;
-const odooDb = process.env.ODOO_DB;
-const odooUsername = process.env.ODOO_USERNAME;
-const odooPassword = process.env.ODOO_PASSWORD;
-
-// Hardcoded Sales Order sequence based on the user's Python script
-const HARDCODED_SO_SEQUENCE = 'SO - 10379';
-
-function createOdooClient(path: string): Client {
-  if (!odooUrl) throw new Error("ODOO_URL is not configured in environment variables.");
-  const urlParts = new URL(odooUrl);
-  return xmlrpc.createSecureClient({
-    host: urlParts.hostname,
-    port: urlParts.port || 443, // Default to 443 for https
-    path: path,
-  });
-}
-
-async function odooRpcCall(client: Client, method: string, params: any[]): Promise<any> {
-  return new Promise((resolve, reject) => {
-    client.methodCall(method, params, (error, value) => {
-      if (error) {
-        console.error('Odoo XML-RPC Error:', error);
-        reject(new Error(`Odoo API Error: ${error.message || 'Unknown error'}`));
-      } else {
-        resolve(value);
-      }
-    });
-  });
-}
-
-export async function fetchSalesOrderAction(): Promise<FetchedSalesOrderResult> {
-  if (!odooUrl || !odooDb || !odooUsername || !odooPassword) {
-    return { error: 'Odoo connection details are not configured on the server. Please check your environment variables.' };
-  }
-  
-  const soSequenceToFetch = HARDCODED_SO_SEQUENCE;
-
-  try {
-    const common = createOdooClient('/xmlrpc/2/common');
-    const uid = await odooRpcCall(common, 'authenticate', [odooDb, odooUsername, odooPassword, {}]);
-
-    if (!uid) {
-      console.error(`Odoo authentication failed. User: '${odooUsername}', DB: '${odooDb}', URL: '${odooUrl}'. Ensure credentials in environment variables are correct.`);
-      return { error: 'Odoo authentication failed. Check server credentials.' };
-    }
-
-    const models = createOdooClient('/xmlrpc/2/object');
-
-    // Find the sale.order record by name
-    const salesOrderRecords = await odooRpcCall(models, 'execute_kw', [
-      odooDb, uid, odooPassword,
-      'sale.order', 'search_read',
-      [[['name', 'ilike', soSequenceToFetch]]], 
-      { 'fields': ['id', 'name'], 'limit': 1 }
-    ]);
-
-    if (!salesOrderRecords || salesOrderRecords.length === 0) {
-      return { error: `No Sales Order found matching sequence '${soSequenceToFetch}'.` };
-    }
-    const saleOrder = salesOrderRecords[0];
-    const saleOrderId = saleOrder.id;
-
-    // Find PDF attachment for the Sale Order
-    const attachmentDomain = [
-      ['res_model', '=', 'sale.order'],
-      ['res_id', '=', saleOrderId],
-      ['mimetype', '=', 'application/pdf'],
-    ];
-    const attachments = await odooRpcCall(models, 'execute_kw', [
-      odooDb, uid, odooPassword,
-      'ir.attachment', 'search_read',
-      [attachmentDomain],
-      { 'fields': ['id', 'name', 'datas', 'mimetype', 'file_size'], 'limit': 1 }
-    ]);
-
-    if (!attachments || attachments.length === 0) {
-      return { error: `No PDF attachment found for Sales Order '${soSequenceToFetch}'.` };
-    }
-
-    const attachment = attachments[0];
-    const base64PdfData = attachment.datas;
-    const fileName = attachment.name || `${soSequenceToFetch.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    const mimeType = attachment.mimetype || 'application/pdf';
-    const fileSize = attachment.file_size || Buffer.from(base64PdfData, 'base64').length;
-
-
-    const dataUri = `data:${mimeType};base64,${base64PdfData}`;
-
-    return { fileName, dataUri, fileSize };
-
-  } catch (e: unknown) {
-    console.error('SERVER_ACTION_CRITICAL_ERROR fetching Sales Order:', e);
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    return { error: `Failed to fetch Sales Order PDF: ${errorMessage.substring(0, 300)}` };
-  }
-}
-
-
 export async function compareOrdersAction(formData: FormData): Promise<CompareOrdersResult> {
   const purchaseOrderFile = formData.get('purchaseOrder') as File | null;
-  const salesOrderDataUriFromForm = formData.get('salesOrderDataUri') as string | null;
+  const salesOrderFile = formData.get('salesOrder') as File | null;
 
   if (!purchaseOrderFile) {
-    return { error: 'Purchase order document is required.' };
+    return { error: 'Purchase Order document is required.' };
   }
-  if (!salesOrderDataUriFromForm) {
-    return { error: 'Sales order document (fetched or to be fetched) is required.'}
+  if (!salesOrderFile) {
+    return { error: 'Sales Order document is required.' };
   }
 
   if (!isValidFileType(purchaseOrderFile)) {
-     let poType = purchaseOrderFile.type || 'unknown type';
+    let poType = purchaseOrderFile.type || 'unknown type';
     if (!ALLOWED_MIME_TYPES_UPLOAD.includes(poType) && (purchaseOrderFile.name.endsWith('.csv') || purchaseOrderFile.name.endsWith('.xls') || purchaseOrderFile.name.endsWith('.xlsx'))) {
         poType = `file with extension ${purchaseOrderFile.name.split('.').pop()}`;
     }
     return { error: `Invalid Purchase Order file type. Please upload supported document types (PDF, Image, CSV, Excel). PO: ${poType}` };
   }
+  if (!isValidFileType(salesOrderFile)) {
+    let soType = salesOrderFile.type || 'unknown type';
+     if (!ALLOWED_MIME_TYPES_UPLOAD.includes(soType) && (salesOrderFile.name.endsWith('.csv') || salesOrderFile.name.endsWith('.xls') || salesOrderFile.name.endsWith('.xlsx'))) {
+        soType = `file with extension ${salesOrderFile.name.split('.').pop()}`;
+    }
+    return { error: `Invalid Sales Order file type. Please upload supported document types (PDF, Image, CSV, Excel). SO: ${soType}` };
+  }
 
   try {
     const purchaseOrderDataUri = await fileToDataUri(purchaseOrderFile);
-    const salesOrderDataUri = salesOrderDataUriFromForm;
+    const salesOrderDataUri = await fileToDataUri(salesOrderFile);
 
     const result = await compareOrderDetails({
       purchaseOrder: purchaseOrderDataUri,
@@ -184,13 +84,13 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     });
     return { data: result };
 
-  } catch (e: unknown) { // Catch any error from compareOrderDetails or fileToDataUri
-    console.error("SERVER_ACTION_CRITICAL_ERROR comparing orders:", e); // Full error for server logs
-    
-    let clientFacingMessage = "Failed to compare orders. An unexpected error occurred on the server.";
+  } catch (e: unknown) {
+    console.error("SERVER_ACTION_CRITICAL_ERROR comparing orders:", e);
+
+    let clientFacingMessage = "An unexpected error occurred on the server while comparing orders.";
 
     if (e instanceof Error) {
-        clientFacingMessage = `Failed to compare orders. The AI may have encountered an issue processing the documents. Please ensure they are clear and valid, or try again. Details: ${e.message}`;
+        clientFacingMessage = e.message; // Use the error message from the Genkit flow or other processing steps
         const lowerMessage = e.message.toLowerCase();
         if (lowerMessage.includes("model not found") || lowerMessage.includes("not found for api version") || lowerMessage.includes("could not parse model name")) {
             clientFacingMessage = `Comparison Failed: The specified AI model is not accessible or does not exist. Please check the model name and API key permissions. Original error: ${e.message}`;
@@ -204,13 +104,13 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
             clientFacingMessage = `Comparison Failed: ${e.message}`;
         }
     } else if (typeof e === 'string') {
-        clientFacingMessage = `Comparison Failed: An error occurred: ${e}`;
+        clientFacingMessage = e;
     }
     
-    const finalClientMessage = clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500); // Sanitize and cap length
+    const finalClientMessage = `Failed to compare orders. ${clientFacingMessage}`.replace(/[^\x20-\x7E]/g, '').substring(0, 500);
     
     return {
-        error: `${finalClientMessage}. Please check server logs if the issue persists.`,
+        error: `${finalClientMessage} Please check server logs if the issue persists.`,
     };
   }
 }
