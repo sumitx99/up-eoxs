@@ -89,7 +89,7 @@ async function odooRpcCall(client: Client, method: string, params: any[]): Promi
 
 export async function fetchSalesOrderAction(): Promise<FetchedSalesOrderResult> {
   if (!odooUrl || !odooDb || !odooUsername || !odooPassword) {
-    return { error: 'Odoo connection details are not configured on the server.' };
+    return { error: 'Odoo connection details are not configured on the server. Please check your environment variables.' };
   }
   
   const soSequenceToFetch = HARDCODED_SO_SEQUENCE;
@@ -99,6 +99,7 @@ export async function fetchSalesOrderAction(): Promise<FetchedSalesOrderResult> 
     const uid = await odooRpcCall(common, 'authenticate', [odooDb, odooUsername, odooPassword, {}]);
 
     if (!uid) {
+      console.error(`Odoo authentication failed. User: '${odooUsername}', DB: '${odooDb}', URL: '${odooUrl}'. Ensure credentials in environment variables are correct.`);
       return { error: 'Odoo authentication failed. Check server credentials.' };
     }
 
@@ -108,7 +109,7 @@ export async function fetchSalesOrderAction(): Promise<FetchedSalesOrderResult> 
     const salesOrderRecords = await odooRpcCall(models, 'execute_kw', [
       odooDb, uid, odooPassword,
       'sale.order', 'search_read',
-      [[['name', 'ilike', soSequenceToFetch]]], // Use ilike for flexible matching
+      [[['name', 'ilike', soSequenceToFetch]]], 
       { 'fields': ['id', 'name'], 'limit': 1 }
     ]);
 
@@ -157,7 +158,6 @@ export async function fetchSalesOrderAction(): Promise<FetchedSalesOrderResult> 
 export async function compareOrdersAction(formData: FormData): Promise<CompareOrdersResult> {
   const purchaseOrderFile = formData.get('purchaseOrder') as File | null;
   const salesOrderDataUriFromForm = formData.get('salesOrderDataUri') as string | null;
-  // const salesOrderNameFromForm = formData.get('salesOrderName') as string | null; // We can still get this if needed
 
   if (!purchaseOrderFile) {
     return { error: 'Purchase order document is required.' };
@@ -184,32 +184,33 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     });
     return { data: result };
 
-  } catch (e: unknown) {
-    console.error("SERVER_ACTION_CRITICAL_ERROR comparing orders:", e);
-    let detailedErrorMessage = "An unknown error occurred on the server during comparison.";
+  } catch (e: unknown) { // Catch any error from compareOrderDetails or fileToDataUri
+    console.error("SERVER_ACTION_CRITICAL_ERROR comparing orders:", e); // Full error for server logs
+    
+    let clientFacingMessage = "Failed to compare orders. An unexpected error occurred on the server.";
 
     if (e instanceof Error) {
-        detailedErrorMessage = e.message;
+        clientFacingMessage = `Failed to compare orders. The AI may have encountered an issue processing the documents. Please ensure they are clear and valid, or try again. Details: ${e.message}`;
         const lowerMessage = e.message.toLowerCase();
         if (lowerMessage.includes("model not found") || lowerMessage.includes("not found for api version") || lowerMessage.includes("could not parse model name")) {
-            detailedErrorMessage = `The specified AI model is not accessible or does not exist. Please check the model name and API key permissions. Original error: ${e.message}`;
+            clientFacingMessage = `Comparison Failed: The specified AI model is not accessible or does not exist. Please check the model name and API key permissions. Original error: ${e.message}`;
         } else if (lowerMessage.includes("consumer_suspended") || lowerMessage.includes("permission denied") || lowerMessage.includes("api key not valid") || lowerMessage.includes("billing account")) {
-            detailedErrorMessage = `There's an issue with your API key or billing: ${e.message}. Please check your Google Cloud project settings.`;
+            clientFacingMessage = `Comparison Failed: There's an issue with your API key or billing: ${e.message}. Please check your Google Cloud project settings.`;
         } else if (lowerMessage.includes("schema validation failed") || lowerMessage.includes("invalid_argument")) {
-           detailedErrorMessage = `The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
-        } else if (lowerMessage.includes("ai model failed to return valid comparison data")) { // From our custom error in the flow
-            detailedErrorMessage = e.message; // Use the specific message from the flow
-        } else if (lowerMessage.includes("ai model encountered an issue during processing")) { // From our custom error in the flow
-            detailedErrorMessage = e.message; // Use the specific message from the flow
+           clientFacingMessage = `Comparison Failed: The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
+        } else if (lowerMessage.includes("ai model failed to return valid comparison data")) {
+            clientFacingMessage = `Comparison Failed: ${e.message}`; 
+        } else if (lowerMessage.includes("ai model encountered an issue during processing")) { 
+            clientFacingMessage = `Comparison Failed: ${e.message}`;
         }
     } else if (typeof e === 'string') {
-        detailedErrorMessage = e;
+        clientFacingMessage = `Comparison Failed: An error occurred: ${e}`;
     }
     
-    const clientFacingDetail = detailedErrorMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 400);
+    const finalClientMessage = clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500); // Sanitize and cap length
     
     return {
-        error: `Comparison Failed: ${clientFacingDetail}. Please check server logs if the issue persists.`,
+        error: `${finalClientMessage}. Please check server logs if the issue persists.`,
     };
   }
 }
