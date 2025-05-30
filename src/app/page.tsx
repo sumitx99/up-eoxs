@@ -1,7 +1,8 @@
 // src/app/page.tsx
 'use client';
 
-import React, { useState, type FormEvent, useRef } from 'react';
+import React, { useState, type FormEvent, useRef, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -31,7 +32,16 @@ const ACCEPTED_PO_EXTENSIONS_STRING = ".pdf, image/jpeg, image/png, image/webp, 
 
 export default function OrderComparatorPage() {
   const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
-  const [salesOrderName, setSalesOrderName] = useState<string>(''); // For SO Name/Sequence to fetch
+  const [salesOrderName, setSalesOrderName] = useState<string>('');
+
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const raw = searchParams.get('so_name');
+    if (raw) {
+      setSalesOrderName(decodeURIComponent(raw));
+    }
+  }, [searchParams, setSalesOrderName]);
+
 
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -100,7 +110,7 @@ export default function OrderComparatorPage() {
 
     const formData = new FormData();
     formData.append('purchaseOrderFile', purchaseOrderFile);
-    formData.append('salesOrderName', salesOrderName.trim()); // User's input for SO name
+    formData.append('salesOrderName', salesOrderName.trim()); 
 
     const result = await compareOrdersAction(formData);
 
