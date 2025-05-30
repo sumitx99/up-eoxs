@@ -1,7 +1,8 @@
+
 // src/app/page.tsx
 'use client';
 
-import React, { useState, type FormEvent, useRef, useEffect } from 'react';
+import React, { useState, type FormEvent, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,8 +30,7 @@ const ALLOWED_PO_FILE_TYPES_UPLOAD = [
 
 const ACCEPTED_PO_EXTENSIONS_STRING = ".pdf, image/jpeg, image/png, image/webp, .csv, .xls, .xlsx";
 
-
-export default function OrderComparatorPage() {
+function OrderComparatorClientContent() {
   const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
   const [salesOrderName, setSalesOrderName] = useState<string>('');
 
@@ -451,3 +451,13 @@ export default function OrderComparatorPage() {
     </TooltipProvider>
   );
 }
+
+export default function OrderComparatorPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><Loader2 className="h-16 w-16 animate-spin text-primary" /> <p className="ml-4 text-lg">Loading page...</p></div>}>
+      <OrderComparatorClientContent />
+    </Suspense>
+  );
+}
+
+    
