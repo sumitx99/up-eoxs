@@ -15,7 +15,8 @@ interface CompareOrdersResult {
 
 interface FetchedPdfDetails {
   dataUri: string;
-  name: string;
+  fileName: string;    // The name of the generated PDF file
+  originalName: string; // The actual name of the SO from Odoo (e.g., "SO - 05840")
   size: number;
 }
 
@@ -63,27 +64,28 @@ async function fetchSalesOrderPdfFromOdoo(
   }
   const saleOrder = sales[0];
   const saleId = saleOrder.id;
-  const actualSaleName = saleOrder.name; // Use the actual name found in Odoo
-  console.log(`Found Sales Order: ${actualSaleName} (ID: ${saleId})`);
+  const actualSaleOrderName = saleOrder.name; // Use the actual name found in Odoo
+  console.log(`Found Sales Order: ${actualSaleOrderName} (ID: ${saleId})`);
 
   const jar = new CookieJar();
   const axiosInstance = cookieJarSupport(axios.create({ jar, withCredentials: true }));
 
   const loginUrl = `${odooUrl}/web/session/authenticate`;
   try {
+    console.log('Attempting Odoo HTTP login for SO PDF download...');
     const loginResponse = await axiosInstance.post(loginUrl, {
       jsonrpc: '2.0', method: 'call', params: { db: odooDb, login: odooUsername, password: odooPassword }
     }, { headers: { 'Content-Type': 'application/json' } });
 
     if (loginResponse.status !== 200 || !loginResponse.data.result) {
       console.error('Odoo HTTP Login Failed. Status:', loginResponse.status, 'Response Data:', loginResponse.data);
-      const reason = loginResponse.data?.error?.message || 'Response format unexpected or error indicated by Odoo.';
+      const reason = loginResponse.data?.error?.data?.message || loginResponse.data?.error?.message || 'Response format unexpected or error indicated by Odoo.';
       throw new Error(`Odoo HTTP login failed: ${reason}.`);
     }
     console.log('Odoo HTTP login successful for SO PDF download.');
   } catch (loginErr: any) {
     console.error('Odoo HTTP Login Request Error:', loginErr.response?.status, loginErr.response?.data, loginErr.message);
-    const errorDetail = loginErr.response?.data?.error?.message || loginErr.message || 'Unknown HTTP login error';
+    const errorDetail = loginErr.response?.data?.error?.data?.message || loginErr.response?.data?.error?.message || loginErr.message || 'Unknown HTTP login error';
     throw new Error(`Odoo HTTP login request failed: ${errorDetail}. Could not establish session for SO PDF download.`);
   }
 
@@ -92,21 +94,24 @@ async function fetchSalesOrderPdfFromOdoo(
   const pdfResponse = await axiosInstance.get(reportUrl, { responseType: 'arraybuffer' });
 
   const contentType = pdfResponse.headers['content-type'] || pdfResponse.headers['Content-Type'];
+  console.log(`SO PDF Download Response Status: ${pdfResponse.status}, Content-Type: ${contentType}`);
+
   if (pdfResponse.status !== 200 || !contentType || !contentType.toLowerCase().includes('application/pdf') || !pdfResponse.data || !(pdfResponse.data.byteLength > 0)) {
-    let errorDetails = `Odoo did not return a valid PDF for Sales Order '${actualSaleName}'. Status: ${pdfResponse.status}. Content-Type: ${contentType}.`;
+    let errorDetails = `Odoo did not return a valid PDF for Sales Order '${actualSaleOrderName}'. Status: ${pdfResponse.status}. Content-Type: ${contentType}.`;
     if (contentType && (contentType.toLowerCase().includes('text/html') || contentType.toLowerCase().includes('application/json'))) {
       try { errorDetails += ` Response preview: ${Buffer.from(pdfResponse.data).toString('utf8').substring(0, 200)}`; } catch (decodeError) {}
     }
     console.error(errorDetails, 'Data length:', pdfResponse.data?.byteLength);
     throw new Error(errorDetails);
   }
-  console.log(`Successfully fetched SO PDF: ${actualSaleName}.pdf, Size: ${pdfResponse.data.byteLength} bytes`);
+  console.log(`Successfully fetched SO PDF: ${actualSaleOrderName}.pdf, Size: ${pdfResponse.data.byteLength} bytes`);
 
   const pdfBuffer = Buffer.from(pdfResponse.data);
   const base64Pdf = pdfBuffer.toString('base64');
   return {
     dataUri: `data:application/pdf;base64,${base64Pdf}`,
-    name: `${actualSaleName}.pdf`.replace(/[\/\s]+/g, '_'),
+    fileName: `${actualSaleOrderName}.pdf`.replace(/[\/\s]+/g, '_'),
+    originalName: actualSaleOrderName, // Store the original name
     size: pdfBuffer.length,
   };
 }
@@ -114,34 +119,34 @@ async function fetchSalesOrderPdfFromOdoo(
 
 // Function to fetch Purchase Order PDF from Odoo (Attachment)
 async function fetchLinkedPurchaseOrderPdfFromOdoo(
-  actualSaleName: string, // The name of the SO found, used to link POs
+  originalSoName: string, // Use the original SO name for linking
   odooUrl: string,
   odooDb: string,
   odooUsername: string,
   odooPassword: string,
   uid: number // XML-RPC UID from initial auth
 ): Promise<FetchedPdfDetails> {
-  console.log(`Attempting to fetch linked Purchase Order PDF for SO: ${actualSaleName}`);
+  console.log(`Attempting to fetch linked Purchase Order PDF for SO: ${originalSoName}`);
   const modelsClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
 
   const purchaseOrders: any[] = await new Promise((resolve, reject) => {
     modelsClient.methodCall('execute_kw', [
       odooDb, uid, odooPassword,
       'purchase.order', 'search_read',
-      [[['origin', 'ilike', actualSaleName]]], // Find POs whose origin contains the actual SO name
+      [[['origin', 'ilike', originalSoName]]], // Find POs whose origin contains the original SO name
       { fields: ['id', 'name'], limit: 1 } // Fetching the first linked PO
     ], (error, value) => {
-      if (error) return reject(new Error(`Error finding linked Purchase Orders for SO '${actualSaleName}': ${error.message}`));
+      if (error) return reject(new Error(`Error finding linked Purchase Orders for SO '${originalSoName}': ${error.message}`));
       resolve(value as any[]);
     });
   });
 
   if (!purchaseOrders || purchaseOrders.length === 0) {
-    throw new Error(`No Purchase Order found linked to Sales Order '${actualSaleName}'.`);
+    throw new Error(`No Purchase Order found linked to Sales Order '${originalSoName}'.`);
   }
   const purchaseOrder = purchaseOrders[0];
   const poId = purchaseOrder.id;
-  const poName = purchaseOrder.name;
+  const poName = purchaseOrder.name; // This is the PO's name
   console.log(`Found linked Purchase Order: ${poName} (ID: ${poId})`);
 
   const attachments: any[] = await new Promise((resolve, reject) => {
@@ -164,7 +169,8 @@ async function fetchLinkedPurchaseOrderPdfFromOdoo(
     throw new Error(`No PDF attachment found or attachment data is empty for Purchase Order '${poName}' (ID: ${poId}).`);
   }
   const attachment = attachments[0];
-  console.log(`Found PO PDF attachment: ${attachment.name}`);
+  const attachmentName = attachment.name; // This is the attachment's filename
+  console.log(`Found PO PDF attachment: ${attachmentName}`);
 
   const pdfBuffer = Buffer.from(attachment.datas, 'base64');
   if (pdfBuffer.length === 0) {
@@ -173,7 +179,8 @@ async function fetchLinkedPurchaseOrderPdfFromOdoo(
 
   return {
     dataUri: `data:application/pdf;base64,${attachment.datas}`,
-    name: `${attachment.name}`.replace(/[\/\s]+/g, '_'),
+    fileName: `${attachmentName}`.replace(/[\/\s]+/g, '_'),
+    originalName: poName, // The original name of the PO itself
     size: pdfBuffer.length,
   };
 }
@@ -195,10 +202,13 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
     return { error: 'Odoo ERP connection details are not configured on the server.' };
   }
 
+  let salesOrderDetails: FetchedPdfDetails;
+  let purchaseOrderDetails: FetchedPdfDetails;
+
   try {
     console.log(`Fetching Sales Order PDF for user input: ${salesOrderUserInputName.trim()}`);
-    const salesOrderDetails = await fetchSalesOrderPdfFromOdoo(salesOrderUserInputName.trim(), odooUrl, odooDb, odooUsername, odooPassword);
-    console.log(`Successfully fetched Sales Order PDF: ${salesOrderDetails.name}, Size: ${salesOrderDetails.size} bytes`);
+    salesOrderDetails = await fetchSalesOrderPdfFromOdoo(salesOrderUserInputName.trim(), odooUrl, odooDb, odooUsername, odooPassword);
+    console.log(`Successfully fetched Sales Order PDF: ${salesOrderDetails.fileName}, Original SO Name: ${salesOrderDetails.originalName}, Size: ${salesOrderDetails.size} bytes`);
 
     // Re-authenticate for PO fetching (or reuse UID if possible, but separate auth is safer for distinct operations)
     const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
@@ -217,17 +227,16 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
         throw new Error(`Odoo Authentication Failed (XML-RPC for PO): ${authError.message}. Please check server credentials for Odoo.`);
     }
 
-    // Use the actual SO name returned by Odoo to find linked POs
-    const actualSalesOrderName = salesOrderDetails.name.replace(/\.pdf$/i, '').replace(/_/g, ' '); // Attempt to get original name
-    console.log(`Fetching linked Purchase Order PDF using actual SO name: ${actualSalesOrderName}`);
-    const purchaseOrderDetails = await fetchLinkedPurchaseOrderPdfFromOdoo(actualSalesOrderName, odooUrl, odooDb, odooUsername, odooPassword, poFetchUid);
-    console.log(`Successfully fetched linked Purchase Order PDF: ${purchaseOrderDetails.name}, Size: ${purchaseOrderDetails.size} bytes`);
+    // Use the actual SO name returned by fetchSalesOrderPdfFromOdoo to find linked POs
+    console.log(`Fetching linked Purchase Order PDF using original SO name: ${salesOrderDetails.originalName}`);
+    purchaseOrderDetails = await fetchLinkedPurchaseOrderPdfFromOdoo(salesOrderDetails.originalName, odooUrl, odooDb, odooUsername, odooPassword, poFetchUid);
+    console.log(`Successfully fetched linked Purchase Order PDF: ${purchaseOrderDetails.fileName}, Original PO Name: ${purchaseOrderDetails.originalName}, Size: ${purchaseOrderDetails.size} bytes`);
 
 
     if (salesOrderDetails.size === 0 || purchaseOrderDetails.size === 0) {
         let warningMessage = "";
-        if (salesOrderDetails.size === 0) warningMessage += `Fetched Sales Order PDF for '${salesOrderDetails.name}' is empty (0 bytes). `;
-        if (purchaseOrderDetails.size === 0) warningMessage += `Fetched Purchase Order PDF for '${purchaseOrderDetails.name}' is empty (0 bytes). `;
+        if (salesOrderDetails.size === 0) warningMessage += `Fetched Sales Order PDF for '${salesOrderDetails.fileName}' is empty (0 bytes). `;
+        if (purchaseOrderDetails.size === 0) warningMessage += `Fetched Purchase Order PDF for '${purchaseOrderDetails.fileName}' is empty (0 bytes). `;
         console.warn(warningMessage + "This will likely cause issues with AI comparison.");
         // Optionally, you could return an error here if 0-byte files are unacceptable
         // return { error: warningMessage.trim() + " Comparison aborted."};
@@ -242,47 +251,60 @@ export async function compareOrdersAction(formData: FormData): Promise<CompareOr
   } catch (e: unknown) {
     let clientFacingMessage = "An unexpected error occurred on the server while fetching or comparing orders.";
     let logMessage = "SERVER_ACTION_CRITICAL_ERROR processing orders:";
+    let errorDetailsString = "";
 
     if (e instanceof Error) {
-        clientFacingMessage = e.message;
+        clientFacingMessage = e.message; // Start with the direct error message
         logMessage = `SERVER_ACTION_ERROR (${e.constructor.name}): ${e.message}`;
+        errorDetailsString = e.message; // For including in client message
 
-        if (e.message.toLowerCase().includes("authentication failed") ||
-            e.message.toLowerCase().includes("login failed") ||
-            e.message.toLowerCase().includes("returned an invalid uid")) {
+        // More specific error messages based on keywords
+        const lowerCaseMessage = e.message.toLowerCase();
+        if (lowerCaseMessage.includes("authentication failed") ||
+            lowerCaseMessage.includes("login failed") ||
+            lowerCaseMessage.includes("returned an invalid uid")) {
             clientFacingMessage = `Odoo Authentication Failed: ${e.message}. Please check server credentials for Odoo.`;
-        } else if (e.message.toLowerCase().includes("not found in odoo") || e.message.toLowerCase().includes("no purchase order found linked")) {
+        } else if (lowerCaseMessage.includes("not found in odoo") || lowerCaseMessage.includes("no purchase order found linked")) {
             clientFacingMessage = `Odoo Data Error: ${e.message}. Ensure the Sales Order name is correct and has linked Purchase Orders.`;
-        } else if (e.message.toLowerCase().includes("no pdf attachment found") || e.message.toLowerCase().includes("attachment data is empty") || e.message.toLowerCase().includes("decoded pdf attachment for po is empty")) {
+        } else if (lowerCaseMessage.includes("no pdf attachment found") || lowerCaseMessage.includes("attachment data is empty") || lowerCaseMessage.includes("decoded pdf attachment for po is empty")) {
             clientFacingMessage = `Odoo Attachment Error: ${e.message}. A required PDF attachment might be missing or empty.`;
-        } else if (e.message.toLowerCase().includes("failed to download pdf") ||
-                   e.message.toLowerCase().includes("did not return a pdf document") ||
-                   e.message.toLowerCase().includes("odoo returned content type")) {
+        } else if (lowerCaseMessage.includes("failed to download pdf") ||
+                   lowerCaseMessage.includes("did not return a pdf document") ||
+                   lowerCaseMessage.includes("odoo did not return a valid pdf") ||
+                   lowerCaseMessage.includes("returned content type")) {
             clientFacingMessage = `Odoo PDF Fetch Error: ${e.message}. Problem obtaining PDF from Odoo.`;
-        } else if (e.message.toLowerCase().includes("model not found") || e.message.toLowerCase().includes("not found for api version")) {
-            clientFacingMessage = `AI Model Error: The specified AI model is not accessible. Original error: ${e.message}`;
-        } else if (e.message.toLowerCase().includes("consumer_suspended") || e.message.toLowerCase().includes("permission denied") || e.message.toLowerCase().includes("api key not valid")) {
+        } else if (lowerCaseMessage.includes("model not found") || lowerCaseMessage.includes("not found for api version") || (e.cause as any)?.message?.includes("NOT_FOUND")) {
+             clientFacingMessage = `AI Model Error: The specified AI model is not accessible. Original error: ${e.message}`;
+        } else if (lowerCaseMessage.includes("consumer_suspended") || lowerCaseMessage.includes("permission denied") || lowerCaseMessage.includes("api key not valid")) {
             clientFacingMessage = `AI Service Error: Issue with API key or billing: ${e.message}. Check Google Cloud settings.`;
-        } else if (e.message.toLowerCase().includes("schema validation failed") || e.message.toLowerCase().includes("invalid_argument")) {
+        } else if (lowerCaseMessage.includes("schema validation failed") || lowerCaseMessage.includes("invalid_argument")) {
            clientFacingMessage = `AI Data Error: The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
-        } else if (e.message.toLowerCase().includes("ai model encountered an issue during processing")) {
-            clientFacingMessage = e.message;
-        } else if (e.message.toLowerCase().includes("ai model failed to return valid comparison data")) {
-            clientFacingMessage = e.message;
+        } else if (lowerCaseMessage.includes("ai model encountered an issue during processing")) {
+            clientFacingMessage = e.message; // This error is usually specific enough
+        } else if (lowerCaseMessage.includes("ai model failed to return valid comparison data")) {
+            clientFacingMessage = e.message; // This error is usually specific enough
         }
     } else if (typeof e === 'string') {
         clientFacingMessage = e;
         logMessage = `SERVER_ACTION_ERROR (string): ${e}`;
+        errorDetailsString = e;
     } else {
         logMessage = `SERVER_ACTION_ERROR (unknown type): ${String(e)}`;
+        errorDetailsString = String(e);
     }
+    
+    console.error(logMessage, e); // Log the original error object for full details on the server
 
-    console.error(logMessage, e);
+    // Sanitize and cap the length of errorDetailsString for client display
+    const sanitizedDetails = errorDetailsString.replace(/[^\x20-\x7E]/g, '').substring(0, 300);
 
-    const finalClientMessage = `Comparison Failed: ${clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500)}`;
+    const finalClientMessage = `Comparison Failed: ${clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500)}. Please check server logs if the issue persists.`;
+    
     return {
-        error: `${finalClientMessage} Please check server logs if the issue persists.`,
+        error: finalClientMessage,
     };
   }
 }
+    
+
     
