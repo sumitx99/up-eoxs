@@ -25,16 +25,16 @@ const CompareOrderDetailsInputSchema = z.object({
 export type CompareOrderDetailsInput = z.infer<typeof CompareOrderDetailsInputSchema>;
 
 const DiscrepancySchema = z.object({
-  field: z.string().describe('The general document field with a discrepancy (e.g., PO Number, Overall Discount, Payment Terms, or an unmatched product). This is for non-product line items or for flagging products found in one order but not the other.'),
+  field: z.string().describe('The general document field with a discrepancy (e.g., PO Number, Overall Discount, Payment Terms, Buyer Name, Shipping Address, or an unmatched product). This is for non-product line items or for flagging products found in one order but not the other.'),
   purchaseOrderValue: z.string().describe('The value from the purchase order document. For an unmatched SO product, this might be "Desc: [SO Product Description], Qty: [SO Quantity], Unit Price: [SO Unit Price]" or similar if only found in SO, or simply "N/A".'),
   salesOrderValue: z.string().describe('The value from the sales order document. For an unmatched PO product, this might be "Desc: [PO Product Description], Qty: [PO Quantity], Unit Price: [PO Unit Price]" or similar if only found in PO, or simply "N/A".'),
-  reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch (e.g., "Quantities differ", "Product found only in PO").'),
+  reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch (e.g., "Quantities differ", "Product found only in PO", "Buyer names differ").'),
 });
 export type Discrepancy = z.infer<typeof DiscrepancySchema>;
 
 
 const MatchedItemSchema = z.object({
-  field: z.string().describe('The general document field that matches (e.g., PO Number, Buyer Name, Vendor). This is for non-product line items.'),
+  field: z.string().describe('The general document field that matches (e.g., PO Number, Vendor Name, Order Date). This is for non-product line items.'),
   value: z.string().describe('The common value found in both the purchase order and sales order documents.'),
   matchQuality: z.enum(['exact', 'normalized', 'inferred']).optional().describe('The quality of the match (e.g., exact string match, match after normalization, or inferred match based on context). Default to "exact" if not specified.'),
 });
@@ -107,7 +107,8 @@ Based on your analysis of the document contents, provide the following in a vali
 
    **A. Document-Level Field Discrepancies:**
       - Meticulously compare **general document fields that are NOT product line items**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
-      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address"), 'purchaseOrderValue', 'salesOrderValue', and 'reason' for the discrepancy.
+      - **Pay extremely close attention to Buyer/Customer names and their full addresses (Shipping and Billing). Even minor differences in names (e.g., 'Titan Steel Works' vs. 'Steel America') or any significant differences in address components (street, city, state, zip code) MUST be flagged as discrepancies.** Do not assume entities are the same if their names or addresses show such variations.
+      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address", "Buyer Name"), 'purchaseOrderValue', 'salesOrderValue', and 'reason' for the discrepancy (e.g., "Buyer names differ", "Shipping addresses do not match").
 
    **B. Unmatched Product Line Item Discrepancies:**
       - During your detailed product line item analysis (detailed in section 2 below), you will identify some products as 'PO_ONLY' or 'SO_ONLY'.
@@ -125,7 +126,8 @@ Based on your analysis of the document contents, provide the following in a vali
       - **Crucially, ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' during the detailed product line item analysis (section 2) results in a corresponding entry in this 'discrepancies' array (section 1).**
 
    **C. Matched General Document Fields:**
-      - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Buyer Name, Vendor Name, Order Dates, etc.
+      - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Vendor Name, Order Dates, etc.
+      - **For critical fields like Buyer names and full addresses, only list them as 'matchedItems' if they are an exact or near-exact text match (use 'exact' for 'matchQuality'). If there are notable differences, they should be listed as discrepancies instead.** Avoid using 'inferred' for these specific fields unless the evidence is overwhelmingly strong across multiple related sub-fields and you explicitly state the basis of this strong inference in the 'comparisonNotes' or overall 'summary'. If in doubt about a match for such critical fields, list it as a discrepancy.
 
 **2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
    - Perform a detailed comparison of product line items. For each product line item found in the PO, try to find its corresponding item in the SO (and vice-versa). Strive to find the best possible match for product descriptions, even if there are minor wording differences, acronyms, or variations in item codes/SKUs. Focus on semantic similarity where appropriate.
@@ -202,13 +204,14 @@ const compareOrderDetailsFlow = ai.defineFlow(
       };
       
       return finalOutput;
-    } catch (error: unknown) { // Changed 'any' to 'unknown'
+    } catch (error: unknown) { 
       console.error("Error in compareOrderDetailsFlow: ", error);
-      // Re-throw the error to be handled by the server action's catch block.
-      // This simplifies the flow's responsibility regarding error message formatting for the client.
       if (error instanceof Error) {
         // If it's already an Error object, re-throw it.
         // Specific error message construction for client can be handled by the calling server action.
+        if (error.message.includes("is not found for API version") || error.message.includes("API key not valid") || error.message.includes("Permission denied")) {
+            throw new Error(`AI Model/API Key Error: ${error.message}. Please check model availability and API key permissions.`);
+        }
         throw error;
       }
       // If it's not an Error object, wrap it in one.
