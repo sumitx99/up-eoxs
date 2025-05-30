@@ -11,28 +11,18 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, UploadCloud, FileText, FileImage, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, AlertCircle, Workflow, FileType, Search, Scale } from 'lucide-react';
+import { Loader2, FileWarning, UploadCloud, FileText, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, AlertCircle, Workflow, FileType, Search, Scale } from 'lucide-react';
 import { compareOrdersAction } from './actions';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-const ALLOWED_PO_FILE_TYPES_UPLOAD = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "text/csv",
-  "application/vnd.ms-excel", // .xls
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" // .xlsx
-];
-
-const ACCEPTED_PO_EXTENSIONS_STRING = ".pdf, image/jpeg, image/png, image/webp, .csv, .xls, .xlsx";
-
 function OrderComparatorClientContent() {
-  const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
   const [salesOrderName, setSalesOrderName] = useState<string>('');
+  const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   useEffect(() => {
@@ -42,52 +32,7 @@ function OrderComparatorClientContent() {
     }
   }, [searchParams, setSalesOrderName]);
 
-
-  const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const purchaseOrderRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-
-  const getFileIcon = (file: File | null) => {
-    if (!file) return <UploadCloud className="h-4 w-4 mr-2 text-muted-foreground" />;
-    
-    let mimeType = file.type;
-    let fileName = file.name.toLowerCase();
-
-    if (mimeType.startsWith("image/")) return <FileImage className="h-4 w-4 mr-2 text-primary" />;
-    if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) return <FileText className="h-4 w-4 mr-2 text-red-600" />;
-    if (mimeType === "text/csv" || fileName.endsWith(".csv")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />;
-    if (mimeType.includes("excel") || mimeType.includes("spreadsheetml") || fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) return <FileSpreadsheet className="h-4 w-4 mr-2 text-green-700" />;
-    return <FileType className="h-4 w-4 mr-2 text-gray-500" />;
-  };
-
-  const handlePOFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const fileExtension = file.name.split('.').pop()?.toLowerCase();
-      const isValidExtension = fileExtension && ['pdf', 'jpeg', 'jpg', 'png', 'webp', 'csv', 'xls', 'xlsx'].includes(fileExtension);
-      const isValidMime = ALLOWED_PO_FILE_TYPES_UPLOAD.includes(file.type);
-      
-      if (isValidMime || isValidExtension) {
-        setPurchaseOrderFile(file);
-        setError(null); 
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Invalid Purchase Order File Type",
-          description: `Unsupported file: ${file.name}. Please upload PDF, Image (JPEG, PNG, WebP), CSV, or Excel (.xls, .xlsx). Type detected: ${file.type || `.${fileExtension}` || 'unknown'}.`,
-        });
-        setPurchaseOrderFile(null);
-        if (event.target) {
-          event.target.value = ""; 
-        }
-      }
-    } else {
-      setPurchaseOrderFile(null);
-    }
-  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -95,22 +40,15 @@ function OrderComparatorClientContent() {
     setError(null);
     setComparisonResult(null);
 
-    if (!purchaseOrderFile) {
-      setError("Please upload a Purchase Order document.");
-      setIsLoading(false);
-      toast({ variant: "destructive", title: "Missing PO Document", description: "Please upload the Purchase Order document." });
-      return;
-    }
     if (!salesOrderName.trim()) {
-      setError("Please enter the Sales Order name/sequence to fetch its PDF.");
+      setError("Please enter the Sales Order name/sequence to fetch documents.");
       setIsLoading(false);
-      toast({ variant: "destructive", title: "Missing Sales Order Name", description: "Please enter the Sales Order name or sequence number to fetch its PDF." });
+      toast({ variant: "destructive", title: "Missing Sales Order Name", description: "Please enter the Sales Order name or sequence." });
       return;
     }
 
     const formData = new FormData();
-    formData.append('purchaseOrderFile', purchaseOrderFile);
-    formData.append('salesOrderName', salesOrderName.trim()); 
+    formData.append('salesOrderName', salesOrderName.trim());
 
     const result = await compareOrdersAction(formData);
 
@@ -126,7 +64,7 @@ function OrderComparatorClientContent() {
         variant: "destructive",
         title: "Comparison Error",
         description: result.error,
-        duration: 9000, 
+        duration: 9000,
       });
     }
     setIsLoading(false);
@@ -143,9 +81,9 @@ function OrderComparatorClientContent() {
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
         return <span>❌</span>;
       case 'PO_ONLY':
-        return <MinusCircle className="h-5 w-5 text-orange-500" />; 
+        return <MinusCircle className="h-5 w-5 text-orange-500" />;
       case 'SO_ONLY':
-        return <PackagePlus className="h-5 w-5 text-blue-500" />; 
+        return <PackagePlus className="h-5 w-5 text-blue-500" />;
       default:
         return <HelpCircle className="h-5 w-5 text-muted-foreground" />;
     }
@@ -166,17 +104,16 @@ function OrderComparatorClientContent() {
         </header>
 
         <div className="w-full max-w-6xl mx-auto grid grid-cols-1 gap-8">
-          
           <Accordion type="single" collapsible className="w-full shadow-lg rounded-lg bg-card" defaultValue="input-documents">
             <AccordionItem value="input-documents" className="border-b-0">
                <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
                 <div>
                   <h2 className="text-2xl font-semibold flex items-center">
-                    <UploadCloud className="mr-3 h-7 w-7 text-primary" />
-                    Input Order Documents
+                    <Search className="mr-3 h-7 w-7 text-primary" />
+                    Input Sales Order Identifier
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    Upload Purchase Order and provide Sales Order name to fetch and compare.
+                    Provide Sales Order name/sequence to fetch both SO and linked PO for comparison.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -184,26 +121,7 @@ function OrderComparatorClientContent() {
                 <Card className="shadow-none border-0 rounded-t-none">
                   <form onSubmit={handleSubmit}>
                     <CardContent className="space-y-6 pt-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="purchaseOrder" className="text-lg font-medium">Purchase Order Document</Label>
-                            <Input
-                              id="purchaseOrder"
-                              type="file"
-                              accept={ACCEPTED_PO_EXTENSIONS_STRING}
-                              ref={purchaseOrderRef}
-                              onChange={handlePOFileChange}
-                              className="w-full focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                              required
-                              disabled={isLoading}
-                            />
-                        {purchaseOrderFile && (
-                          <p className="text-sm text-muted-foreground flex items-center mt-2">
-                            {getFileIcon(purchaseOrderFile)} Selected: {purchaseOrderFile.name} ({Math.round(purchaseOrderFile.size / 1024)} KB)
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
+                       <div className="space-y-2">
                         <Label htmlFor="salesOrderName" className="text-lg font-medium">Sales Order Name/Sequence</Label>
                         <Input
                           id="salesOrderName"
@@ -215,11 +133,11 @@ function OrderComparatorClientContent() {
                           required
                           disabled={isLoading}
                         />
-                         <p className="text-xs text-muted-foreground">Enter the exact Sales Order name or sequence to fetch its PDF from the ERP system.</p>
+                         <p className="text-xs text-muted-foreground">Enter the Sales Order name. The system will attempt to fetch this SO's PDF and the PDF of the first Purchase Order linked to it.</p>
                       </div>
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || !purchaseOrderFile || !salesOrderName.trim()}>
+                        <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || !salesOrderName.trim()}>
                           {isLoading ? (
                             <>
                               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -251,8 +169,8 @@ function OrderComparatorClientContent() {
               {isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                  <p className="text-lg">Comparing documents, please wait...</p>
-                  <p className="text-sm">This may involve fetching Sales Order PDF and AI analysis.</p>
+                  <p className="text-lg">Fetching and comparing documents, please wait...</p>
+                  <p className="text-sm">This may involve multiple calls to ERP and AI analysis.</p>
                 </div>
               )}
               {error && !isLoading && (
@@ -277,7 +195,7 @@ function OrderComparatorClientContent() {
                     <AccordionItem value="matched-items">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                          <FileKey2 className="mr-2 h-6 w-6 text-blue-600" /> 
+                          <FileKey2 className="mr-2 h-6 w-6 text-blue-600" />
                           General Matched Fields ({comparisonResult.matchedItems?.length || 0})
                         </div>
                       </AccordionTrigger>
@@ -314,11 +232,11 @@ function OrderComparatorClientContent() {
                         )}
                       </AccordionContent>
                     </AccordionItem>
-                    
+
                     <AccordionItem value="discrepancies">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                           <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> 
+                           <AlertCircle className="mr-2 h-6 w-6 text-destructive" />
                            General Discrepancies ({comparisonResult.discrepancies?.length || 0})
                         </div>
                       </AccordionTrigger>
@@ -369,7 +287,7 @@ function OrderComparatorClientContent() {
                     <AccordionItem value="product-line-items">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                          <PackageSearch className="mr-2 h-6 w-6 text-purple-600" /> 
+                          <PackageSearch className="mr-2 h-6 w-6 text-purple-600" />
                           Product Line Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
                         </div>
                       </AccordionTrigger>
@@ -431,9 +349,9 @@ function OrderComparatorClientContent() {
               )}
               {!isLoading && !error && !comparisonResult && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
-                  <UploadCloud className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Upload PO and enter SO name to see the comparison results.</p>
-                  <p className="text-sm">The AI will analyze their content to find discrepancies and matching details.</p>
+                  <Search className="h-16 w-16 text-gray-400 mb-4" />
+                  <p className="text-lg">Enter a Sales Order name to fetch and compare documents.</p>
+                  <p className="text-sm">The system will retrieve the SO PDF and its first linked PO PDF for comparison.</p>
                 </div>
               )}
             </CardContent>
@@ -459,5 +377,4 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
-
     
