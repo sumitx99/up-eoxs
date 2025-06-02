@@ -1,9 +1,8 @@
 // src/app/page.tsx
 'use client';
 
-import React, { useState, useEffect, Suspense, useActionState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -16,44 +15,16 @@ import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineIt
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { compareOrdersAction } from '@/app/actions';
-
-const initialState: CompareOrderDetailsOutput | { error: string } | null = null;
-
-interface SubmitButtonProps {
-  isSalesOrderNameEmpty: boolean;
-}
-
-function SubmitButton({ isSalesOrderNameEmpty }: SubmitButtonProps) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full text-lg py-3" disabled={pending || isSalesOrderNameEmpty}>
-      {pending ? (
-        <>
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Comparing Documents...
-        </>
-      ) : (
-        <>
-          <Workflow className="mr-2 h-5 w-5" />
-          Compare Order Documents
-        </>
-      )}
-    </Button>
-  );
-}
 
 
 function OrderComparatorClientContent() {
   const [salesOrderName, setSalesOrderName] = useState<string>('');
-  const [formState, formAction] = useActionState(compareOrdersAction, initialState);
-  
-  const [internalError, setInternalError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
 
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { pending: formIsSubmitting } = useFormStatus(); // Renamed to avoid conflict if SubmitButton was inlined
 
   useEffect(() => {
     const raw = searchParams.get('so_name');
@@ -62,27 +33,65 @@ function OrderComparatorClientContent() {
     }
   }, [searchParams, setSalesOrderName]);
 
-  useEffect(() => {
-    if (formState) {
-      if ('error' in formState && formState.error) {
-        setInternalError(formState.error);
+  const handleCompareSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSalesOrderNameEmpty) return;
+
+    setIsLoading(true);
+    setError(null);
+    setComparisonResult(null);
+
+    try {
+      const response = await fetch('/api/compare-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ so_sequence: salesOrderName.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.error) { 
+            setError(data.error);
+            setComparisonResult(null);
+            toast({
+                variant: "destructive",
+                title: "Comparison Error from API",
+                description: data.error,
+                duration: 9000,
+            });
+        } else {
+            setComparisonResult(data as CompareOrderDetailsOutput);
+            toast({
+                title: "Comparison Complete",
+                description: "The order documents have been compared successfully.",
+            });
+        }
+      } else {
+        const errorMsg = data.error || `Request failed with status ${response.status}`;
+        setError(errorMsg);
         setComparisonResult(null);
         toast({
           variant: "destructive",
-          title: "Comparison Error",
-          description: formState.error,
+          title: "API Request Error",
+          description: errorMsg,
           duration: 9000,
         });
-      } else if (!('error' in formState) && formState !== null) { 
-        setComparisonResult(formState as CompareOrderDetailsOutput);
-        setInternalError(null);
-        toast({
-          title: "Comparison Complete",
-          description: "The order documents have been compared successfully.",
-        });
       }
+    } catch (err: any) {
+      const errorMsg = err.message || "An unexpected error occurred while calling the API.";
+      setError(errorMsg);
+      setComparisonResult(null);
+      toast({
+        variant: "destructive",
+        title: "Network/Client Error",
+        description: errorMsg,
+        duration: 9000,
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [formState, toast]);
+  };
   
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
@@ -134,7 +143,7 @@ function OrderComparatorClientContent() {
               </AccordionTrigger>
               <AccordionContent className="p-0">
                 <Card className="shadow-none border-0 rounded-t-none">
-                  <form action={formAction}>
+                  <form onSubmit={handleCompareSubmit}>
                     <CardContent className="space-y-6 pt-6">
                        <div className="space-y-2">
                         <Label htmlFor="salesOrderName" className="text-lg font-medium">Sales Order Name/Sequence</Label>
@@ -147,13 +156,25 @@ function OrderComparatorClientContent() {
                           onChange={(e) => setSalesOrderName(e.target.value)}
                           className="w-full focus:ring-primary focus:border-primary"
                           required
-                          disabled={formIsSubmitting} 
+                          disabled={isLoading} 
                         />
                          <p className="text-xs text-muted-foreground">Enter the Sales Order name. The system will attempt to fetch this SO's PDF and the PDF of the first Purchase Order linked to it.</p>
                       </div>
                     </CardContent>
                     <CardFooter>
-                        <SubmitButton isSalesOrderNameEmpty={isSalesOrderNameEmpty} />
+                        <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || isSalesOrderNameEmpty}>
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              Comparing Documents...
+                            </>
+                          ) : (
+                            <>
+                              <Workflow className="mr-2 h-5 w-5" />
+                              Compare Order Documents
+                            </>
+                          )}
+                        </Button>
                     </CardFooter>
                   </form>
                 </Card>
@@ -169,21 +190,21 @@ function OrderComparatorClientContent() {
               </CardDescription>
             </CardHeader>
             <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col space-y-6">
-              {formIsSubmitting && (
+              {isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                   <p className="text-lg">Fetching and comparing documents, please wait...</p>
                   <p className="text-sm">This may involve multiple calls to ERP and AI analysis.</p>
                 </div>
               )}
-              {internalError && !formIsSubmitting && (
+              {error && !isLoading && (
                 <Alert variant="destructive" className="mb-4">
                   <FileWarning className="h-5 w-5" />
                   <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{internalError}</AlertDescription>
+                  <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              {!formIsSubmitting && !internalError && comparisonResult && (
+              {!isLoading && !error && comparisonResult && (
                 <>
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
@@ -350,7 +371,7 @@ function OrderComparatorClientContent() {
                   </Accordion>
                 </>
               )}
-              {!formIsSubmitting && !internalError && !comparisonResult && (
+              {!isLoading && !error && !comparisonResult && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <Search className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Enter a Sales Order name to fetch and compare documents.</p>
@@ -358,7 +379,7 @@ function OrderComparatorClientContent() {
                 </div>
               )}
             </CardContent>
-            {comparisonResult && !formIsSubmitting && !internalError && (
+            {comparisonResult && !isLoading && !error && (
               <CardFooter>
                 <ExportButton data={comparisonResult} reportId="reportContentArea" className="w-full text-lg py-3" />
               </CardFooter>
@@ -380,3 +401,4 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+
