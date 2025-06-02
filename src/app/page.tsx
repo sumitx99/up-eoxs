@@ -20,10 +20,14 @@ import { compareOrdersAction } from '@/app/actions';
 
 const initialState: CompareOrderDetailsOutput | { error: string } | null = null;
 
-function SubmitButton() {
+interface SubmitButtonProps {
+  isSalesOrderNameEmpty: boolean;
+}
+
+function SubmitButton({ isSalesOrderNameEmpty }: SubmitButtonProps) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full text-lg py-3" disabled={pending || !document.getElementById('salesOrderName') || !(document.getElementById('salesOrderName') as HTMLInputElement).value.trim()}>
+    <Button type="submit" className="w-full text-lg py-3" disabled={pending || isSalesOrderNameEmpty}>
       {pending ? (
         <>
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -49,7 +53,7 @@ function OrderComparatorClientContent() {
 
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { pending } = useFormStatus(); // Get pending state for the form
+  const { pending: formIsSubmitting } = useFormStatus(); // Renamed to avoid conflict if SubmitButton was inlined
 
   useEffect(() => {
     const raw = searchParams.get('so_name');
@@ -99,6 +103,8 @@ function OrderComparatorClientContent() {
     }
   };
 
+  const isSalesOrderNameEmpty = salesOrderName.trim() === '';
+
   return (
     <TooltipProvider>
       <div className="min-h-screen p-4 md:p-8 bg-background">
@@ -141,13 +147,13 @@ function OrderComparatorClientContent() {
                           onChange={(e) => setSalesOrderName(e.target.value)}
                           className="w-full focus:ring-primary focus:border-primary"
                           required
-                          disabled={pending} 
+                          disabled={formIsSubmitting} 
                         />
                          <p className="text-xs text-muted-foreground">Enter the Sales Order name. The system will attempt to fetch this SO's PDF and the PDF of the first Purchase Order linked to it.</p>
                       </div>
                     </CardContent>
                     <CardFooter>
-                        <SubmitButton />
+                        <SubmitButton isSalesOrderNameEmpty={isSalesOrderNameEmpty} />
                     </CardFooter>
                   </form>
                 </Card>
@@ -163,21 +169,21 @@ function OrderComparatorClientContent() {
               </CardDescription>
             </CardHeader>
             <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col space-y-6">
-              {pending && (
+              {formIsSubmitting && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                   <p className="text-lg">Fetching and comparing documents, please wait...</p>
                   <p className="text-sm">This may involve multiple calls to ERP and AI analysis.</p>
                 </div>
               )}
-              {internalError && !pending && (
+              {internalError && !formIsSubmitting && (
                 <Alert variant="destructive" className="mb-4">
                   <FileWarning className="h-5 w-5" />
                   <AlertTitle>Error</AlertTitle>
                   <AlertDescription>{internalError}</AlertDescription>
                 </Alert>
               )}
-              {!pending && !internalError && comparisonResult && (
+              {!formIsSubmitting && !internalError && comparisonResult && (
                 <>
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
@@ -344,7 +350,7 @@ function OrderComparatorClientContent() {
                   </Accordion>
                 </>
               )}
-              {!pending && !internalError && !comparisonResult && (
+              {!formIsSubmitting && !internalError && !comparisonResult && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <Search className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Enter a Sales Order name to fetch and compare documents.</p>
@@ -352,7 +358,7 @@ function OrderComparatorClientContent() {
                 </div>
               )}
             </CardContent>
-            {comparisonResult && !pending && !internalError && (
+            {comparisonResult && !formIsSubmitting && !internalError && (
               <CardFooter>
                 <ExportButton data={comparisonResult} reportId="reportContentArea" className="w-full text-lg py-3" />
               </CardFooter>
