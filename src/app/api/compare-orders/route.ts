@@ -9,7 +9,7 @@ import { CookieJar } from 'tough-cookie';
 interface FetchedPdfDetails {
   dataUri: string;
   fileName: string;
-  originalName: string;
+  originalName: string; // The actual name/reference from Odoo (e.g., "SO - 10372", "P01866")
   size: number;
 }
 
@@ -56,7 +56,7 @@ async function fetchSalesOrderPdfFromOdoo(
   }
   const saleOrder = sales[0];
   const saleId = saleOrder.id;
-  const actualSaleOrderName = saleOrder.name;
+  const actualSaleOrderName = saleOrder.name; // Use the name retrieved from Odoo
   console.log(`API_ROUTE: Found Sales Order: ${actualSaleOrderName} (ID: ${saleId})`);
 
   const jar = new CookieJar();
@@ -103,18 +103,18 @@ async function fetchSalesOrderPdfFromOdoo(
   return {
     dataUri: `data:application/pdf;base64,${base64Pdf}`,
     fileName: `${actualSaleOrderName}.pdf`.replace(/[\/\s]+/g, '_'),
-    originalName: actualSaleOrderName,
+    originalName: actualSaleOrderName, // Store the actual name from Odoo
     size: pdfBuffer.length,
   };
 }
 
 async function fetchLinkedPurchaseOrderPdfFromOdoo(
-  originalSoName: string,
+  originalSoName: string, // Use the exact SO name from Odoo
   odooUrl: string,
   odooDb: string,
   odooUsername: string,
   odooPassword: string,
-  uid: number
+  uid: number // Pass authenticated UID
 ): Promise<FetchedPdfDetails> {
   console.log(`API_ROUTE: Attempting to fetch linked Purchase Order PDF for SO: ${originalSoName}`);
   const modelsClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
@@ -123,8 +123,8 @@ async function fetchLinkedPurchaseOrderPdfFromOdoo(
     modelsClient.methodCall('execute_kw', [
       odooDb, uid, odooPassword,
       'purchase.order', 'search_read',
-      [[['origin', 'ilike', originalSoName]]],
-      { fields: ['id', 'name'], limit: 1 }
+      [[['origin', 'ilike', originalSoName]]], // Link PO to SO via 'origin' field
+      { fields: ['id', 'name', 'message_main_attachment_id'], limit: 1 } // Fetch message_main_attachment_id
     ], (error, value) => {
       if (error) return reject(new Error(`Error finding linked Purchase Orders for SO '${originalSoName}': ${error.message}`));
       resolve(value as any[]);
@@ -136,42 +136,94 @@ async function fetchLinkedPurchaseOrderPdfFromOdoo(
   }
   const purchaseOrder = purchaseOrders[0];
   const poId = purchaseOrder.id;
-  const poName = purchaseOrder.name;
+  const poName = purchaseOrder.name; // Actual PO name from Odoo
   console.log(`API_ROUTE: Found linked Purchase Order: ${poName} (ID: ${poId})`);
 
-  const attachments: any[] = await new Promise((resolve, reject) => {
-    modelsClient.methodCall('execute_kw', [
-      odooDb, uid, odooPassword,
-      'ir.attachment', 'search_read',
-      [
-        ['res_model', '=', 'purchase.order'],
-        ['res_id', '=', poId],
-        ['mimetype', '=', 'application/pdf']
-      ],
-      { fields: ['name', 'datas'], limit: 1 }
-    ], (error, value) => {
-      if (error) return reject(new Error(`Error finding PDF attachment for PO '${poName}': ${error.message}`));
-      resolve(value as any[]);
+  let attachmentData: string | false = false;
+  let attachmentName = `${poName}_attachment.pdf`; // Default name
+
+  // 1. Try to get PDF via message_main_attachment_id
+  if (purchaseOrder.message_main_attachment_id && purchaseOrder.message_main_attachment_id.length > 0) {
+    const mainAttachmentId = purchaseOrder.message_main_attachment_id[0];
+    console.log(`API_ROUTE: PO has message_main_attachment_id: ${mainAttachmentId}. Fetching it directly.`);
+    const mainAttachment: any[] = await new Promise((resolve, reject) => {
+        modelsClient.methodCall('execute_kw', [
+            odooDb, uid, odooPassword,
+            'ir.attachment', 'search_read',
+            [[['id', '=', mainAttachmentId], ['mimetype', '=', 'application/pdf']]],
+            { fields: ['name', 'datas', 'mimetype'], limit: 1 }
+        ], (error, value) => {
+            if (error) {
+                console.warn(`API_ROUTE: Error fetching attachment by message_main_attachment_id ${mainAttachmentId}: ${error.message}. Will fallback to name search.`);
+                resolve([]); // Resolve empty to allow fallback
+                return;
+            }
+            resolve(value as any[]);
+        });
     });
-  });
-
-  if (!attachments || attachments.length === 0 || !attachments[0].datas) {
-    throw new Error(`No PDF attachment found or attachment data is empty for Purchase Order '${poName}' (ID: ${poId}).`);
+    if (mainAttachment && mainAttachment.length > 0 && mainAttachment[0].datas && mainAttachment[0].mimetype === 'application/pdf') {
+        attachmentData = mainAttachment[0].datas;
+        attachmentName = mainAttachment[0].name;
+        console.log(`API_ROUTE: Successfully fetched PO PDF via message_main_attachment_id: ${attachmentName}`);
+    } else {
+        console.log(`API_ROUTE: PDF not found or not a PDF via message_main_attachment_id. Falling back to name-based search.`);
+    }
+  } else {
+     console.log(`API_ROUTE: No message_main_attachment_id found for PO ${poName}. Using name-based attachment search.`);
   }
-  const attachment = attachments[0];
-  const attachmentName = attachment.name;
-  console.log(`API_ROUTE: Found PO PDF attachment: ${attachmentName}`);
 
-  const pdfBuffer = Buffer.from(attachment.datas, 'base64');
+  // 2. Fallback to name-based search if message_main_attachment_id didn't yield a PDF
+  if (!attachmentData) {
+    console.log(`API_ROUTE: Searching for PO PDF attachments by name for PO ID ${poId}, Name: ${poName}`);
+    const nameFilters = ['PO', 'Purchase Order', 'P0', poName]; // poName itself could be part of the attachment name
+    const orFilters = nameFilters.map(nf => ['name', 'ilike', nf]);
+    
+    // Build the OR part of the domain: [['|', cond1, cond2], ..., condN]
+    let nameDomain: any[] = [];
+    if (orFilters.length > 0) {
+        nameDomain = orFilters.pop()!; // Start with the last one
+        while(orFilters.length > 0) {
+            nameDomain = ['|', orFilters.pop()!, nameDomain];
+        }
+    }
 
+    const attachments: any[] = await new Promise((resolve, reject) => {
+      modelsClient.methodCall('execute_kw', [
+        odooDb, uid, odooPassword,
+        'ir.attachment', 'search_read',
+        [
+          ['res_model', '=', 'purchase.order'],
+          ['res_id', '=', poId],
+          ['mimetype', '=', 'application/pdf'],
+          ...(nameDomain.length > 0 ? [nameDomain] : []) // Add name filter only if there are terms
+        ],
+        { fields: ['name', 'datas'], limit: 1, order: 'create_date DESC' } // Get the most recent if multiple match
+      ], (error, value) => {
+        if (error) return reject(new Error(`Error finding PDF attachment for PO '${poName}': ${error.message}`));
+        resolve(value as any[]);
+      });
+    });
+
+    if (attachments && attachments.length > 0 && attachments[0].datas) {
+      attachmentData = attachments[0].datas;
+      attachmentName = attachments[0].name;
+      console.log(`API_ROUTE: Found PO PDF attachment by name: ${attachmentName}`);
+    }
+  }
+
+  if (!attachmentData) {
+    throw new Error(`No PDF attachment found (tried direct link and name search) for Purchase Order '${poName}' (ID: ${poId}).`);
+  }
+
+  const pdfBuffer = Buffer.from(attachmentData, 'base64');
   if (pdfBuffer.length === 0) {
     throw new Error(`Decoded PDF attachment for PO '${poName}' is empty.`);
   }
 
   return {
-    dataUri: `data:application/pdf;base64,${attachment.datas}`,
-    fileName: `${attachmentName}`.replace(/[\/\s]+/g, '_'),
-    originalName: poName,
+    dataUri: `data:application/pdf;base64,${attachmentData}`,
+    fileName: `${attachmentName}`.replace(/[\/\s]+/g, '_'), // Sanitize file name
+    originalName: poName, // The PO's actual reference/name
     size: pdfBuffer.length,
   };
 }
@@ -200,9 +252,11 @@ export async function POST(req: NextRequest) {
     let salesOrderDetails: FetchedPdfDetails;
     let purchaseOrderDetails: FetchedPdfDetails;
 
+    // Fetch Sales Order PDF (this also authenticates for subsequent XML-RPC calls via cookie jar, though we'll re-auth for XML-RPC for clarity)
     salesOrderDetails = await fetchSalesOrderPdfFromOdoo(salesOrderUserInputName.trim(), odooUrl, odooDb, odooUsername, odooPassword);
     console.log(`API_ROUTE: Successfully fetched Sales Order PDF: ${salesOrderDetails.fileName}, Original SO Name: ${salesOrderDetails.originalName}, Size: ${salesOrderDetails.size} bytes`);
     
+    // Explicit UID for PO fetching XML-RPC calls
     const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
     let poFetchUid: number;
     try {
@@ -216,10 +270,10 @@ export async function POST(req: NextRequest) {
         console.log(`API_ROUTE: Odoo XML-RPC authentication successful for PO fetch. UID: ${poFetchUid}`);
     } catch (authError: any) {
         console.error('API_ROUTE: Odoo XML-RPC Authentication Error (PO Fetch):', authError.message);
-        // Directly throw to be caught by the main try-catch, which will then format the error for NextResponse
         throw new Error(`Odoo Authentication Failed (XML-RPC for PO): ${authError.message}. Please check server credentials for Odoo.`);
     }
 
+    // Fetch linked Purchase Order PDF using the original SO name found by Odoo and the authenticated UID
     purchaseOrderDetails = await fetchLinkedPurchaseOrderPdfFromOdoo(salesOrderDetails.originalName, odooUrl, odooDb, odooUsername, odooPassword, poFetchUid);
     console.log(`API_ROUTE: Successfully fetched linked Purchase Order PDF: ${purchaseOrderDetails.fileName}, Original PO Name: ${purchaseOrderDetails.originalName}, Size: ${purchaseOrderDetails.size} bytes`);
     
@@ -228,8 +282,10 @@ export async function POST(req: NextRequest) {
         if (salesOrderDetails.size === 0) warningMessage += `Fetched Sales Order PDF for '${salesOrderDetails.fileName}' is empty (0 bytes). `;
         if (purchaseOrderDetails.size === 0) warningMessage += `Fetched Purchase Order PDF for '${purchaseOrderDetails.fileName}' is empty (0 bytes). `;
         console.warn("API_ROUTE: " + warningMessage + "This will likely cause issues with AI comparison.");
+        // Potentially return an error or a specific response if critical PDFs are empty
     }
 
+    // Call Genkit AI for comparison
     const result = await compareOrderDetails({
       purchaseOrder: purchaseOrderDetails.dataUri,
       salesOrder: salesOrderDetails.dataUri,
@@ -242,7 +298,7 @@ export async function POST(req: NextRequest) {
     let logMessage = "API_ROUTE_CRITICAL_ERROR processing orders:";
     
     if (e instanceof Error) {
-        clientFacingMessage = e.message;
+        clientFacingMessage = e.message; // Default to the error's message
         logMessage = `API_ROUTE_ERROR (${e.constructor.name}): ${e.message}`;
 
         const lowerCaseMessage = e.message.toLowerCase();
@@ -265,10 +321,8 @@ export async function POST(req: NextRequest) {
             clientFacingMessage = `AI Service Error: Issue with API key or billing: ${e.message}. Check Google Cloud settings.`;
         } else if (lowerCaseMessage.includes("schema validation failed") || lowerCaseMessage.includes("invalid_argument")) {
            clientFacingMessage = `AI Data Error: The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
-        } else if (lowerCaseMessage.includes("ai model encountered an issue during processing")) {
-            clientFacingMessage = e.message;
-        } else if (lowerCaseMessage.includes("ai model failed to return valid comparison data")) {
-            clientFacingMessage = e.message; // Corrected variable name from clientFacing_message
+        } else if (lowerCaseMessage.includes("ai model encountered an issue during processing") || lowerCaseMessage.includes("ai model failed to return valid comparison data")) {
+            clientFacingMessage = e.message; // Pass through specific AI error messages
         }
     } else if (typeof e === 'string') {
         clientFacingMessage = e;
@@ -277,10 +331,14 @@ export async function POST(req: NextRequest) {
         logMessage = `API_ROUTE_ERROR (unknown type): ${String(e)}`;
     }
     
-    console.error(logMessage, e);
+    console.error(logMessage, e); // Log the original error object if available
 
+    // Sanitize message for client, limit length
     const finalClientMessage = `Comparison Failed: ${clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500)}. Please check server logs if the issue persists.`;
     
     return NextResponse.json({ error: finalClientMessage }, { status: 500 });
   }
 }
+
+// Ensure all functions are exported if they are in different modules,
+// but here they are co-located. Helper functions do not need to be exported.
