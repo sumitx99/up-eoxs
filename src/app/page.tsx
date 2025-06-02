@@ -2,7 +2,7 @@
 // src/app/page.tsx
 'use client';
 
-import React, { useState, type FormEvent, useRef, useEffect, Suspense } from 'react';
+import React, { useState, type FormEvent, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, UploadCloud, FileText, FileSpreadsheet, HelpCircle, Info, PackageSearch, MinusCircle, PackagePlus, FileKey2, BadgeHelp, AlertCircle, Workflow, FileType, Search, Scale } from 'lucide-react';
-import { compareOrdersAction } from './actions';
+import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
@@ -41,35 +40,52 @@ function OrderComparatorClientContent() {
     setComparisonResult(null);
 
     if (!salesOrderName.trim()) {
-      setError("Please enter the Sales Order name/sequence to fetch documents.");
+      const msg = "Please enter the Sales Order name/sequence to fetch documents.";
+      setError(msg);
       setIsLoading(false);
-      toast({ variant: "destructive", title: "Missing Sales Order Name", description: "Please enter the Sales Order name or sequence." });
+      toast({ variant: "destructive", title: "Missing Sales Order Name", description: msg });
       return;
     }
 
-    const formData = new FormData();
-    formData.append('salesOrderName', salesOrderName.trim());
-
-    const result = await compareOrdersAction(formData);
-
-    if (result.data) {
-      setComparisonResult(result.data);
-       toast({
-        title: "Comparison Complete",
-        description: "The order documents have been compared successfully.",
+    try {
+      const response = await fetch('/api/compare-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ so_sequence: salesOrderName.trim() }),
       });
-    } else if (result.error) {
-      setError(result.error);
+
+      const resultData = await response.json();
+
+      if (response.ok) {
+        setComparisonResult(resultData as CompareOrderDetailsOutput);
+        toast({
+          title: "Comparison Complete",
+          description: "The order documents have been compared successfully.",
+        });
+      } else {
+        const errorMsg = resultData.error || 'Failed to compare orders. Please check the server logs.';
+        setError(errorMsg);
+        toast({
+          variant: "destructive",
+          title: "Comparison Error",
+          description: errorMsg,
+          duration: 9000,
+        });
+      }
+    } catch (apiError: any) {
+      const errorMsg = apiError.message || "An unexpected error occurred while calling the comparison API.";
+      setError(errorMsg);
       toast({
         variant: "destructive",
-        title: "Comparison Error",
-        description: result.error,
+        title: "API Communication Error",
+        description: errorMsg,
         duration: 9000,
       });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
-
+  
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
@@ -88,7 +104,6 @@ function OrderComparatorClientContent() {
         return <HelpCircle className="h-5 w-5 text-muted-foreground" />;
     }
   };
-
 
   return (
     <TooltipProvider>
@@ -156,7 +171,6 @@ function OrderComparatorClientContent() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-
 
           <Card className="shadow-lg">
             <CardHeader>
@@ -377,4 +391,3 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
-    
