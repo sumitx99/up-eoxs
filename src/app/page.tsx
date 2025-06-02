@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -12,16 +14,47 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
+import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+interface SubmitButtonProps {
+  isSalesOrderNameEmpty: boolean;
+}
+
+function SubmitButton({ isSalesOrderNameEmpty }: SubmitButtonProps) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" className="w-full text-lg py-3" disabled={pending || isSalesOrderNameEmpty}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          Comparing Documents...
+        </>
+      ) : (
+        <>
+          <Workflow className="mr-2 h-5 w-5" />
+          Compare Order Documents
+        </>
+      )}
+    </Button>
+  );
+}
+
+// Define initialState directly in the client component
+const initialState: CompareActionState = {
+  error: null,
+  data: null,
+};
 
 function OrderComparatorClientContent() {
   const [salesOrderName, setSalesOrderName] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [formState, formAction] = useActionState<CompareActionState, FormData>(compareOrdersAction, initialState);
+  
   const [error, setError] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -33,64 +66,37 @@ function OrderComparatorClientContent() {
     }
   }, [searchParams, setSalesOrderName]);
 
-  const handleCompareSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (isSalesOrderNameEmpty) return;
+  useEffect(() => {
+    // This effect handles the outcome of the server action
+    if (formState.error || formState.data) {
+      setIsLoading(false); // Stop loading when we have a result or an error
+    }
 
+    if (formState.error) {
+      setError(formState.error);
+      setComparisonResult(null);
+      toast({
+          variant: "destructive",
+          title: "Comparison Failed",
+          description: formState.error,
+          duration: 9000,
+      });
+    }
+    if (formState.data) {
+      setComparisonResult(formState.data);
+      setError(null);
+      toast({
+          title: "Comparison Complete",
+          description: "The order documents have been compared successfully.",
+      });
+    }
+  }, [formState, toast]);
+
+  const handleFormSubmit = () => {
+    // Trigger loading state when form is about to be submitted
     setIsLoading(true);
     setError(null);
     setComparisonResult(null);
-
-    try {
-      const response = await fetch('/api/compare-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ so_sequence: salesOrderName.trim() }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        if (data.error) { 
-            setError(data.error);
-            setComparisonResult(null);
-            toast({
-                variant: "destructive",
-                title: "Comparison Error from API",
-                description: data.error,
-                duration: 9000,
-            });
-        } else {
-            setComparisonResult(data as CompareOrderDetailsOutput);
-            toast({
-                title: "Comparison Complete",
-                description: "The order documents have been compared successfully.",
-            });
-        }
-      } else {
-        const errorMsg = data.error || `Request failed with status ${response.status}`;
-        setError(errorMsg);
-        setComparisonResult(null);
-        toast({
-          variant: "destructive",
-          title: "API Request Error",
-          description: errorMsg,
-          duration: 9000,
-        });
-      }
-    } catch (err: any) {
-      const errorMsg = err.message || "An unexpected error occurred while calling the API.";
-      setError(errorMsg);
-      setComparisonResult(null);
-      toast({
-        variant: "destructive",
-        title: "Network/Client Error",
-        description: errorMsg,
-        duration: 9000,
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
   
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
@@ -143,7 +149,7 @@ function OrderComparatorClientContent() {
               </AccordionTrigger>
               <AccordionContent className="p-0">
                 <Card className="shadow-none border-0 rounded-t-none">
-                  <form onSubmit={handleCompareSubmit}>
+                  <form action={formAction} onSubmit={handleFormSubmit}>
                     <CardContent className="space-y-6 pt-6">
                        <div className="space-y-2">
                         <Label htmlFor="salesOrderName" className="text-lg font-medium">Sales Order Name/Sequence</Label>
@@ -156,25 +162,12 @@ function OrderComparatorClientContent() {
                           onChange={(e) => setSalesOrderName(e.target.value)}
                           className="w-full focus:ring-primary focus:border-primary"
                           required
-                          disabled={isLoading} 
                         />
                          <p className="text-xs text-muted-foreground">Enter the Sales Order name. The system will attempt to fetch this SO's PDF and the PDF of the first Purchase Order linked to it.</p>
                       </div>
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" className="w-full text-lg py-3" disabled={isLoading || isSalesOrderNameEmpty}>
-                          {isLoading ? (
-                            <>
-                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                              Comparing Documents...
-                            </>
-                          ) : (
-                            <>
-                              <Workflow className="mr-2 h-5 w-5" />
-                              Compare Order Documents
-                            </>
-                          )}
-                        </Button>
+                       <SubmitButton isSalesOrderNameEmpty={isSalesOrderNameEmpty} />
                     </CardFooter>
                   </form>
                 </Card>
@@ -401,4 +394,3 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
-
