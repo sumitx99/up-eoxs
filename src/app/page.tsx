@@ -128,9 +128,9 @@ function OrderComparatorClientContent() {
             src="/eoxs_logo.png"
             alt="EOXS Logo"
             width={128}
-            height={50}
-            className="object-contain border border-red-500" // Added temporary border for debugging
-            priority={true} // Added priority
+            height={62} 
+            className="object-contain"
+            priority={true}
           />
         </div>
         <header className="mb-6 text-center">
