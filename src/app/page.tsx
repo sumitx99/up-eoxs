@@ -104,13 +104,13 @@ function OrderComparatorClientContent() {
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
-        return <span role="img" aria-label="Matched">✅</span>;
+        return <span>✅</span>;
       case 'MISMATCH_QUANTITY':
       case 'MISMATCH_UNIT_PRICE':
       case 'MISMATCH_TOTAL_PRICE':
       case 'MISMATCH_DESCRIPTION':
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
-        return <span role="img" aria-label="Mismatch">❌</span>;
+        return <span>❌</span>;
       case 'PO_ONLY':
         return <MinusCircle className="h-5 w-5 text-orange-500" />;
       case 'SO_ONLY':
@@ -131,14 +131,14 @@ function OrderComparatorClientContent() {
             alt="EOXS Logo"
             width={128} 
             height={62} 
-            className="object-contain border border-red-500" // Added diagnostic border
+            className="object-contain border border-red-500" 
             priority 
           />
         </div>
         <header className="mb-8 text-center">
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
-            <h1 className="text-4xl font-bold text-foreground">AI Comparator</h1>
+            <h1 className="text-4xl font-bold text-foreground">EOXS AI COMPARATOR</h1>
           </div>
           <p className="text-muted-foreground text-lg">
             AI-powered tool to compare purchase orders with sales orders fetched from ERP.
@@ -220,11 +220,11 @@ function OrderComparatorClientContent() {
                     </p>
                   </div>
 
-                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "product-line-items"]}>
+                  <Accordion type="multiple" className="w-full" defaultValue={["matched-items", "discrepancies", "product-line-items"]}>
                     <AccordionItem value="matched-items">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                          <FileKey2 className="mr-2 h-6 w-6 text-accent" />
+                          <FileKey2 className="mr-2 h-6 w-6 text-blue-600" />
                           General Matched Fields ({comparisonResult.matchedItems?.length || 0})
                         </div>
                       </AccordionTrigger>
@@ -234,17 +234,17 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold w-[45%] text-sm">Field</TableHead>
-                                  <TableHead className="font-semibold w-[35%] text-sm">Matched Value</TableHead>
-                                  <TableHead className="font-semibold w-[20%] text-center text-sm">Quality</TableHead>
+                                  <TableHead className="font-semibold w-[45%]">Field</TableHead>
+                                  <TableHead className="font-semibold w-[35%]">Matched Value</TableHead>
+                                  <TableHead className="font-semibold w-[20%] text-center">Quality</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.matchedItems.map((item, index) => (
                                   <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
-                                    <TableCell className="font-medium py-1.5 px-3 text-xs whitespace-pre-line">{item.field}</TableCell>
-                                    <TableCell className="py-1.5 px-3 text-xs whitespace-pre-line">{item.value}</TableCell>
-                                    <TableCell className="text-center py-1.5 px-3 text-xs">
+                                    <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{item.field}</TableCell>
+                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{item.value}</TableCell>
+                                    <TableCell className="text-center py-2 px-3 text-sm whitespace-pre-line">
                                       <span className="capitalize">{item.matchQuality || 'Exact'}</span>
                                     </TableCell>
                                   </TableRow>
@@ -256,7 +256,7 @@ function OrderComparatorClientContent() {
                           <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
                             <AlertTitle className="text-base">No General Matched Fields Identified.</AlertTitle>
-                            <AlertDescription>The AI did not find any general fields that match between the documents.</AlertDescription>
+                            <AlertDescription>The AI did not find any general fields that match between the two documents.</AlertDescription>
                           </Alert>
                         )}
                       </AccordionContent>
@@ -275,19 +275,19 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold w-[30%] text-sm">Field</TableHead>
-                                  <TableHead className="font-semibold w-[27%] text-sm">PO Value</TableHead>
-                                  <TableHead className="font-semibold w-[27%] text-sm">SO Value</TableHead>
-                                  <TableHead className="font-semibold w-[16%] text-center text-sm">Reason</TableHead>
+                                  <TableHead className="font-semibold w-[30%]">Field</TableHead>
+                                  <TableHead className="font-semibold w-[27%]">PO Value</TableHead>
+                                  <TableHead className="font-semibold w-[27%]">SO Value</TableHead>
+                                  <TableHead className="font-semibold w-[16%] text-center">Reason</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.discrepancies.map((d, index) => (
                                   <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
-                                    <TableCell className="font-medium py-1.5 px-3 text-xs whitespace-pre-line">{d.field}</TableCell>
-                                    <TableCell className="py-1.5 px-3 text-xs whitespace-pre-line">{d.purchaseOrderValue}</TableCell>
-                                    <TableCell className="py-1.5 px-3 text-xs whitespace-pre-line">{d.salesOrderValue}</TableCell>
-                                    <TableCell className="text-center py-1.5 px-3 text-xs">
+                                    <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{d.field}</TableCell>
+                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{d.purchaseOrderValue}</TableCell>
+                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{d.salesOrderValue}</TableCell>
+                                    <TableCell className="text-center py-2 px-3 text-sm whitespace-pre-line">
                                       <Tooltip delayDuration={100}>
                                         <TooltipTrigger asChild>
                                           <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
