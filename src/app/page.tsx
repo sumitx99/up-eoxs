@@ -3,6 +3,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Image from 'next/image'; // Import next/image
 import { useSearchParams } from 'next/navigation';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
@@ -109,7 +110,7 @@ function OrderComparatorClientContent() {
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
         return <XCircle className="h-4 w-4 text-destructive" />;
       case 'PO_ONLY':
-        return <MinusCircle className="h-4 w-4 text-orange-500" />;
+        return <MinusCircle className="h-4 w-4 text-orange-500" />; // Keeping orange for PO_ONLY for distinction
       case 'SO_ONLY':
         return <PackagePlus className="h-4 w-4 text-accent" />;
       default:
@@ -122,6 +123,15 @@ function OrderComparatorClientContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen p-3 md:p-6 bg-background">
+        <div className="w-full flex justify-end px-4 pt-4 mb-2">
+          <Image
+            src="/eoxs_logo.png"
+            alt="EOXS Logo"
+            width={128}
+            height={50}
+            className="object-contain"
+          />
+        </div>
         <header className="mb-6 text-center">
           <div className="flex items-center justify-center mb-1">
             <Scale className="h-10 w-10 text-primary mr-2" />
@@ -413,3 +423,4 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+
