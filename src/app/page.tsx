@@ -290,7 +290,7 @@ function OrderComparatorClientContent() {
                       <Card className="border shadow-sm">
                         <CardHeader className="p-3 border-b">
                            <CardTitle className="text-lg font-medium flex items-center">
-                             <FileKey2 className="mr-2 h-5 w-5 text-blue-600" /> General Matched Fields
+                             <FileKey2 className="mr-2 h-5 w-5 text-accent" /> General Matched Fields
                            </CardTitle>
                            <CardDescription className="text-xs">Fields matching between SO and linked PO(s).</CardDescription>
                         </CardHeader>
@@ -392,7 +392,7 @@ function OrderComparatorClientContent() {
             </CardContent>
             {comparisonResult && !isLoading && !error && (
               <CardFooter className="p-4 border-t">
-                <ExportButton data={comparisonResult} reportId="reportContentArea" className="w-full text-md py-2.5" />
+                <ExportButton data={comparisonResult} reportId="reportContentArea" className="w-full text-md py-2.5" variant="secondary" />
               </CardFooter>
             )}
           </Card>
