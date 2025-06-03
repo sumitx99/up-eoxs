@@ -143,9 +143,9 @@ export async function compareOrdersAction(
     console.log(`SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.fileName}, Original SO Name: ${salesOrderDetails.originalName}, Size: ${salesOrderDetails.size} bytes`);
 
     // Placeholder for Purchase Order
-    const placeholderPoText = "Intentionally Blank Purchase Order";
-    const placeholderPoBase64 = Buffer.from(placeholderPoText).toString('base64');
-    const placeholderPoDataUri = `data:text/plain;charset=utf-8;base64,${placeholderPoBase64}`;
+    // const placeholderPoText = "Intentionally Blank Purchase Order"; // Removed as per request
+    // const placeholderPoBase64 = Buffer.from(placeholderPoText).toString('base64'); // Removed as per request
+    const placeholderPoDataUri = `data:text/plain;charset=utf-8;base64,${placeholderPoBase64}`; // This will cause a ReferenceError as placeholderPoBase64 is not defined
     
     console.log("SERVER_ACTION: Purchase Order fetching is disabled. Using placeholder for PO.");
 
@@ -169,7 +169,11 @@ export async function compareOrdersAction(
         clientFacingMessage = e.message;
         logMessage = `SERVER_ACTION_ERROR (${e.constructor.name}): ${e.message}`;
         const lowerCaseMessage = e.message.toLowerCase();
-        if (lowerCaseMessage.includes("authentication failed") ||
+        
+        if (e.name === 'ReferenceError' && e.message.includes('placeholderPoBase64')) {
+            clientFacingMessage = `Developer Error: The variable 'placeholderPoBase64' was used without being defined. This likely means the placeholder PO logic is currently incomplete due to a recent change. Full error: ${e.message}`;
+            logMessage = `SERVER_ACTION_ERROR (ReferenceError for placeholderPoBase64): ${e.message}`;
+        } else if (lowerCaseMessage.includes("authentication failed") ||
             lowerCaseMessage.includes("login failed") ||
             lowerCaseMessage.includes("returned an invalid uid")) {
             clientFacingMessage = `Odoo Authentication Failed: ${e.message}. Please check server credentials for Odoo.`;
@@ -196,7 +200,7 @@ export async function compareOrdersAction(
         logMessage = `SERVER_ACTION_ERROR (unknown type): ${String(e)}`;
     }
 
-    console.error(logMessage, e);
+    console.error(logMessage, e); // Log the original error object for full details
     const finalClientMessage = `Processing Failed: ${clientFacingMessage.replace(/[^\x20-\x7E]/g, '').substring(0, 500)}. Please check server logs if the issue persists.`;
 
     return { error: finalClientMessage };
