@@ -1,8 +1,8 @@
-
 // src/app/page.tsx
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Image from 'next/image'; // Import the Next.js Image component
 import { useSearchParams } from 'next/navigation';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
@@ -124,6 +124,16 @@ function OrderComparatorClientContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen p-4 md:p-8 bg-background">
+        <div className="w-full flex justify-end px-4 pt-4 mb-2">
+          <Image
+            src="/eoxs_logo.png" // Assumes your logo is eoxs_logo.png in the public folder
+            alt="EOXS Logo"
+            width={128} // Adjust width as needed
+            height={50} // Adjust height as needed, maintaining aspect ratio
+            className="object-contain"
+            priority // Optional: LCP optimization if logo is above the fold
+          />
+        </div>
         <header className="mb-8 text-center">
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
@@ -395,3 +405,5 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+
+    
