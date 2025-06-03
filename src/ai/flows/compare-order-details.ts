@@ -197,7 +197,7 @@ Ensure all fields in the output schema are populated according to your findings.
         threshold: 'BLOCK_ONLY_HIGH',
       },
     ],
-    // Added helper for handlebars to slice array
+    knownHelpersOnly: false, // Explicitly set to false
     customHelpers: {
       slice: (array: any[], start: number) => array.slice(start),
       eq: (a: any, b: any) => a === b,
