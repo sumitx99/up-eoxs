@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 'use client';
 
@@ -126,12 +127,12 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <div className="w-full flex justify-end px-4 pt-4 mb-2">
           <Image
-            src="/eoxs_logo.png" // Assumes your logo is eoxs_logo.png in the public folder
+            src="/eoxs_logo.svg" 
             alt="EOXS Logo"
-            width={128} // Adjust width as needed
-            height={50} // Adjust height as needed, maintaining aspect ratio
+            width={128} 
+            height={62} 
             className="object-contain"
-            priority // Optional: LCP optimization if logo is above the fold
+            priority 
           />
         </div>
         <header className="mb-8 text-center">
@@ -219,11 +220,11 @@ function OrderComparatorClientContent() {
                     </p>
                   </div>
 
-                  <Accordion type="multiple" className="w-full" defaultValue={["matched-items", "discrepancies", "product-line-items"]}>
+                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "product-line-items"]}>
                     <AccordionItem value="matched-items">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                          <FileKey2 className="mr-2 h-6 w-6 text-blue-600" />
+                          <FileKey2 className="mr-2 h-6 w-6 text-accent" />
                           General Matched Fields ({comparisonResult.matchedItems?.length || 0})
                         </div>
                       </AccordionTrigger>
@@ -233,17 +234,17 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold w-[45%]">Field</TableHead>
-                                  <TableHead className="font-semibold w-[35%]">Matched Value</TableHead>
-                                  <TableHead className="font-semibold w-[20%] text-center">Quality</TableHead>
+                                  <TableHead className="font-semibold w-[45%] text-sm">Field</TableHead>
+                                  <TableHead className="font-semibold w-[35%] text-sm">Matched Value</TableHead>
+                                  <TableHead className="font-semibold w-[20%] text-center text-sm">Quality</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.matchedItems.map((item, index) => (
                                   <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
-                                    <TableCell className="font-medium py-2 px-3 text-sm">{item.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm">{item.value}</TableCell>
-                                    <TableCell className="text-center py-2 px-3 text-sm">
+                                    <TableCell className="font-medium py-1.5 px-3 text-xs whitespace-pre-line">{item.field}</TableCell>
+                                    <TableCell className="py-1.5 px-3 text-xs whitespace-pre-line">{item.value}</TableCell>
+                                    <TableCell className="text-center py-1.5 px-3 text-xs">
                                       <span className="capitalize">{item.matchQuality || 'Exact'}</span>
                                     </TableCell>
                                   </TableRow>
@@ -255,7 +256,7 @@ function OrderComparatorClientContent() {
                           <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
                             <AlertTitle className="text-base">No General Matched Fields Identified.</AlertTitle>
-                            <AlertDescription>The AI did not find any general fields that match between the two documents.</AlertDescription>
+                            <AlertDescription>The AI did not find any general fields that match between the documents.</AlertDescription>
                           </Alert>
                         )}
                       </AccordionContent>
@@ -274,26 +275,26 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold w-[30%]">Field</TableHead>
-                                  <TableHead className="font-semibold w-[27%]">PO Value</TableHead>
-                                  <TableHead className="font-semibold w-[27%]">SO Value</TableHead>
-                                  <TableHead className="font-semibold w-[16%] text-center">Reason</TableHead>
+                                  <TableHead className="font-semibold w-[30%] text-sm">Field</TableHead>
+                                  <TableHead className="font-semibold w-[27%] text-sm">PO Value</TableHead>
+                                  <TableHead className="font-semibold w-[27%] text-sm">SO Value</TableHead>
+                                  <TableHead className="font-semibold w-[16%] text-center text-sm">Reason</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.discrepancies.map((d, index) => (
                                   <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
-                                    <TableCell className="font-medium py-2 px-3 text-sm">{d.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm">{d.purchaseOrderValue}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm">{d.salesOrderValue}</TableCell>
-                                    <TableCell className="text-center py-2 px-3 text-sm">
+                                    <TableCell className="font-medium py-1.5 px-3 text-xs whitespace-pre-line">{d.field}</TableCell>
+                                    <TableCell className="py-1.5 px-3 text-xs whitespace-pre-line">{d.purchaseOrderValue}</TableCell>
+                                    <TableCell className="py-1.5 px-3 text-xs whitespace-pre-line">{d.salesOrderValue}</TableCell>
+                                    <TableCell className="text-center py-1.5 px-3 text-xs">
                                       <Tooltip delayDuration={100}>
                                         <TooltipTrigger asChild>
                                           <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent className="bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg max-w-xs">
                                           <p className="font-semibold">Discrepancy Reason:</p>
-                                          <p className="text-sm">{d.reason || 'No specific reason provided.'}</p>
+                                          <p className="text-sm whitespace-pre-line">{d.reason || 'No specific reason provided.'}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
@@ -326,35 +327,35 @@ function OrderComparatorClientContent() {
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
                                   <TableHead className="font-semibold text-xs w-[15%]">PO Product</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[7%]">PO Qty</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">PO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">PO Total</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[7%] text-center">PO Qty</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">PO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">PO Total</TableHead>
                                   <TableHead className="font-semibold text-xs w-[15%]">SO Product</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[7%]">SO Qty</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">SO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">SO Total</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[7%] text-center">SO Qty</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">SO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">SO Total</TableHead>
                                   <TableHead className="font-semibold text-xs w-[16%] text-center">Status / Notes</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.productLineItemComparisons.map((item, index) => (
                                   <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50'}>
-                                    <TableCell className="py-2 px-2 text-xs">{item.poProductDescription || 'N/A'}</TableCell>
-                                    <TableCell className="py-2 px-2 text-xs text-center">{item.poQuantity || 'N/A'}</TableCell>
-                                    <TableCell className="py-2 px-2 text-xs text-right">{item.poUnitPrice || 'N/A'}</TableCell>
-                                    <TableCell className="py-2 px-2 text-xs text-right">{item.poTotalPrice || 'N/A'}</TableCell>
-                                    <TableCell className="py-2 px-2 text-xs">{item.soProductDescription || 'N/A'}</TableCell>
-                                    <TableCell className="py-2 px-2 text-xs text-center">{item.soQuantity || 'N/A'}</TableCell>
-                                    <TableCell className="py-2 px-2 text-xs text-right">{item.soUnitPrice || 'N/A'}</TableCell>
-                                    <TableCell className="py-2 px-2 text-xs text-right">{item.soTotalPrice || 'N/A'}</TableCell>
-                                    <TableCell className="text-center py-2 px-2 text-xs">
+                                    <TableCell className="py-1.5 px-2 text-xs whitespace-pre-line">{item.poProductDescription || 'N/A'}</TableCell>
+                                    <TableCell className="py-1.5 px-2 text-xs text-center whitespace-pre-line">{item.poQuantity || 'N/A'}</TableCell>
+                                    <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.poUnitPrice || 'N/A'}</TableCell>
+                                    <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.poTotalPrice || 'N/A'}</TableCell>
+                                    <TableCell className="py-1.5 px-2 text-xs whitespace-pre-line">{item.soProductDescription || 'N/A'}</TableCell>
+                                    <TableCell className="py-1.5 px-2 text-xs text-center whitespace-pre-line">{item.soQuantity || 'N/A'}</TableCell>
+                                    <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.soUnitPrice || 'N/A'}</TableCell>
+                                    <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.soTotalPrice || 'N/A'}</TableCell>
+                                    <TableCell className="text-center py-1.5 px-2 text-xs">
                                       <Tooltip delayDuration={100}>
                                         <TooltipTrigger asChild>
                                           <span className="inline-block cursor-help">{getProductStatusIcon(item.status)}</span>
                                         </TooltipTrigger>
                                         <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
                                           <p className="font-semibold capitalize">{item.status.replace(/_/g, ' ').toLowerCase()}:</p>
-                                          <p className="text-sm">{item.comparisonNotes || 'No specific notes.'}</p>
+                                          <p className="text-sm whitespace-pre-line">{item.comparisonNotes || 'No specific notes.'}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
@@ -385,7 +386,7 @@ function OrderComparatorClientContent() {
             </CardContent>
             {comparisonResult && !isLoading && !error && (
               <CardFooter>
-                <ExportButton data={comparisonResult} reportId="reportContentArea" className="w-full text-lg py-3" />
+                <ExportButton data={comparisonResult} reportId="reportContentArea" variant="secondary" className="w-full text-lg py-3" />
               </CardFooter>
             )}
           </Card>
@@ -405,5 +406,7 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+
+    
 
     
