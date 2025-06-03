@@ -128,8 +128,8 @@ function OrderComparatorClientContent() {
             src="/eoxs_logo.png"
             alt="EOXS Logo"
             width={128}
-            height={62} 
-            className="object-contain"
+            height={50} 
+            className="object-contain border border-red-500"
             priority={true}
           />
         </div>
