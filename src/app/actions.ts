@@ -139,14 +139,16 @@ export async function compareOrdersAction(
   try {
     // 1) Fetch Sales Order PDF
     const salesOrderDetails = await fetchSalesOrderPdfFromOdoo(salesOrderUserInputName.trim(), odooUrl, odooDb, odooUsername, odooPassword);
-    console.log(`SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.originalName} (size: ${salesOrderDetails.size} bytes)`);
-    console.log(`SERVER_ACTION: Reminder: For more accurate PO linking, consider using salesOrderDetails.originalName ('${salesOrderDetails.originalName}') instead of salesOrderUserInputName ('${salesOrderUserInputName.trim()}') when calling fetchPurchaseOrderPdfsFromOdoo if they might differ.`);
+    console.log(
+      `SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.originalName} (size: ${salesOrderDetails.size} bytes)`
+    );
 
-
+    // ────────────────────────────────────────────────────────────────
     // 2) FETCH ALL PURCHASE ORDER PDFs linked to this Sale Order
-    const purchaseOrderDetails: FetchedPdfDetails[] =
+    // ────────────────────────────────────────────────────────────────
+    const purchaseOrderDetails: FetchedPdfDetails[] = 
       await fetchPurchaseOrderPdfsFromOdoo(
-        salesOrderDetails.originalName, // Use actual SO name for more accurate linking
+        salesOrderUserInputName.trim(), // Using user input SO name as per explicit instruction
         odooUrl,
         odooDb,
         odooUsername,
@@ -160,23 +162,7 @@ export async function compareOrdersAction(
       );
     });
     
-    if (salesOrderDetails.size === 0) {
-        let warningMessage = `Fetched Sales Order PDF for '${salesOrderDetails.fileName}' is empty (0 bytes). `;
-        console.warn("SERVER_ACTION: " + warningMessage + "This will likely cause issues with AI comparison.");
-    }
-    
-    if (purchaseOrderDetails.length === 0) {
-      console.warn(`SERVER_ACTION: No Purchase Orders were found for Sales Order '${salesOrderDetails.originalName}'. Proceeding with SO only for comparison against an effectively blank PO.`);
-    } else if (purchaseOrderDetails.some(po => po.size === 0)) {
-      purchaseOrderDetails.forEach(po => {
-        if (po.size === 0) {
-          console.warn(`SERVER_ACTION: Fetched Purchase Order PDF for '${po.fileName}' is empty (0 bytes). This specific PO might not be effectively compared.`);
-        }
-      });
-    }
-
-    // 3) Now pass SO data URI and an array of PO data URIs into compareOrderDetails()
-    // The compareOrderDetails flow will need to be updated to handle this input structure.
+    // 3) Now pass BOTH data URIs into compareOrderDetails()
     const poDataUris = purchaseOrderDetails.map(po => po.dataUri);
     
     const comparisonResult = await compareOrderDetails({
@@ -229,7 +215,6 @@ export async function compareOrdersAction(
   }
 }
 
-
 /**
  *  fetchPurchaseOrderPdfsFromOdoo
  *
@@ -238,14 +223,14 @@ export async function compareOrdersAction(
  *  returning an array of FetchedPdfDetails.
  */
 async function fetchPurchaseOrderPdfsFromOdoo(
-  soActualName: string, // Changed from soUserInputName to actual SO name for better linking
+  soUserInputName: string,
   odooUrl: string,
   odooDb: string,
   odooUsername: string,
   odooPassword: string
 ): Promise<FetchedPdfDetails[]> {
   console.log(
-    `SERVER_ACTION: Attempting to fetch all POs linked to Sale Order: ${soActualName}`
+    `SERVER_ACTION: Attempting to fetch all POs linked to Sale Order: ${soUserInputName}`
   );
   // 1) Authenticate via XML‐RPC
   const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
@@ -271,15 +256,15 @@ async function fetchPurchaseOrderPdfsFromOdoo(
       );
     });
   } catch (authErr) {
-    console.error("SERVER_ACTION: Odoo Auth Error during PO fetch:", authErr);
-    throw authErr; // Re-throw to be caught by compareOrdersAction
+    console.error("SERVER_ACTION:", authErr);
+    throw authErr;
   }
 
   // 2) Create an Object‐RPC client
   const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
 
   // 3) Search for all purchase.order records whose origin contains the SO name
-  const poSearchDomain = [["origin", "ilike", soActualName]];
+  const poSearchDomain = [["origin", "ilike", soUserInputName]];
   let poRecords: Array<{ id: number; name: string }>;
   try {
     poRecords = await new Promise((resolve, reject) => {
@@ -292,12 +277,12 @@ async function fetchPurchaseOrderPdfsFromOdoo(
           "purchase.order",
           "search_read",
           [poSearchDomain],
-          { fields: ["id", "name"], limit: 10 }, // Limit to 10 POs for sanity
+          { fields: ["id", "name"], limit: 10 },
         ],
         (err, value) => {
           if (err) {
             return reject(
-              new Error(`Odoo search_read for POs failed: ${err.message}`)
+              new Error(`Odoo search_read (POs) failed: ${err.message}`)
             );
           }
           resolve(value as Array<{ id: number; name: string }>);
@@ -306,14 +291,14 @@ async function fetchPurchaseOrderPdfsFromOdoo(
     });
   } catch (searchErr) {
     console.error("SERVER_ACTION: Error searching POs:", searchErr);
-    throw searchErr; // Re-throw
+    throw searchErr;
   }
 
   if (!poRecords || poRecords.length === 0) {
     console.warn(
-      `SERVER_ACTION: No Purchase Orders found for origin containing '${soActualName}'.`
+      `SERVER_ACTION: No Purchase Orders found for origin containing '${soUserInputName}'.`
     );
-    return []; // Return empty array, compareOrdersAction will handle this
+    return [];
   }
 
   // 4) For each PO, fetch its PDF attachment via ir.attachment.search_read
@@ -324,7 +309,6 @@ async function fetchPurchaseOrderPdfsFromOdoo(
       ["res_model", "=", "purchase.order"],
       ["res_id", "=", po.id],
       ["mimetype", "=", "application/pdf"],
-      // ['name', 'ilike', po.name] // Optional: further filter by name if needed, but usually res_id is specific enough
     ];
 
     let attachments: Array<{ id: number; name: string; datas: string }>;
@@ -339,12 +323,12 @@ async function fetchPurchaseOrderPdfsFromOdoo(
             "ir.attachment",
             "search_read",
             [attSearchDomain],
-            { fields: ["id", "name", "datas"], limit: 1, order: 'create_date DESC' }, // Get the most recent one if multiple
+            { fields: ["id", "name", "datas"], limit: 1 },
           ],
           (err, value) => {
             if (err) {
               return reject(
-                new Error(`Odoo IR.Attachment search_read for PO '${po.name}' failed: ${err.message}`)
+                new Error(`Odoo IR.Attachment search_read failed: ${err.message}`)
               );
             }
             resolve(value as Array<{ id: number; name: string; datas: string }>);
@@ -352,26 +336,18 @@ async function fetchPurchaseOrderPdfsFromOdoo(
         );
       });
     } catch (attErr) {
-      console.error(`SERVER_ACTION: Error fetching attachment for PO '${po.name}':`, attErr);
-      // Decide if one failed PO attachment fetch should stop all, or just skip this PO.
-      // For now, let's skip and log, allowing others to be processed.
-      continue; 
+      console.error("SERVER_ACTION: Error fetching PO attachment:", attErr);
+      continue;
     }
 
     if (!attachments || attachments.length === 0) {
-      console.warn(`SERVER_ACTION: No PDF attachment found for PO '${po.name}' (id=${po.id}).`);
+      console.warn(`SERVER_ACTION: No PDF found for PO '${po.name}' (id=${po.id}).`);
       continue;
     }
 
     // 5) Decode & return as Data URI + metadata
     const att = attachments[0];
     const binary = Buffer.from(att.datas, "base64");
-    
-    if(binary.byteLength === 0){
-        console.warn(`SERVER_ACTION: PDF attachment for PO '${po.name}' (id=${po.id}, att.id=${att.id}) is empty (0 bytes). Skipping.`);
-        continue;
-    }
-    
     const dataUri = `data:application/pdf;base64,${att.datas}`;
     results.push({
       dataUri,
@@ -383,4 +359,3 @@ async function fetchPurchaseOrderPdfsFromOdoo(
 
   return results;
 }
-
