@@ -141,13 +141,15 @@ export async function compareOrdersAction(
     
     salesOrderDetails = await fetchSalesOrderPdfFromOdoo(salesOrderUserInputName.trim(), odooUrl, odooDb, odooUsername, odooPassword);
     console.log(`SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.fileName}, Original SO Name: ${salesOrderDetails.originalName}, Size: ${salesOrderDetails.size} bytes`);
+    console.log(`SERVER_ACTION: Reminder: For more accurate PO linking, consider using salesOrderDetails.originalName ('${salesOrderDetails.originalName}') instead of salesOrderUserInputName ('${salesOrderUserInputName.trim()}') when calling fetchPurchaseOrderPdfsFromOdoo if they might differ.`);
+
 
     // ────────────────────────────────────────────────────────────────
     // 4b) FETCH ALL PURCHASE ORDER PDFs linked to this Sale Order
     // ────────────────────────────────────────────────────────────────
     const purchaseOrderDetails: FetchedPdfDetails[] = 
       await fetchPurchaseOrderPdfsFromOdoo(
-        salesOrderUserInputName.trim(), // Note: Consider using salesOrderDetails.originalName for more accuracy
+        salesOrderUserInputName.trim(), // Consider using salesOrderDetails.originalName for more accuracy
         odooUrl,
         odooDb,
         odooUsername,
@@ -166,8 +168,11 @@ export async function compareOrdersAction(
         console.warn("SERVER_ACTION: " + warningMessage + "This will likely cause issues with AI comparison.");
     }
 
+    // The 'placeholderPoDataUri' variable is no longer defined here after recent changes.
+    // The following line will cause a ReferenceError. It needs to be updated to use one of the fetched POs.
+    // For now, this demonstrates the placeholder has been removed and the next step is to use the fetched POs.
     const result = await compareOrderDetails({
-      purchaseOrder: placeholderPoDataUri, // This will cause a ReferenceError as placeholderPoDataUri is not defined
+      purchaseOrder: placeholderPoDataUri, // This will cause a ReferenceError
       salesOrder: salesOrderDetails.dataUri,
     });
 
@@ -225,8 +230,148 @@ export async function compareOrdersAction(
   }
 }
 
-// Define initialState directly in the client component (src/app/page.tsx)
-// export const initialState: CompareActionState = { // This was moved to page.tsx
-//   error: null,
-//   data: null,
-// };
+
+/**
+ *  fetchPurchaseOrderPdfsFromOdoo
+ *
+ *  Finds all Purchase Orders whose `origin` contains the given Sales Order name,
+ *  then downloads each PO’s PDF via XML‐RPC `ir.attachment` search,
+ *  returning an array of FetchedPdfDetails.
+ */
+async function fetchPurchaseOrderPdfsFromOdoo(
+  soUserInputName: string,
+  odooUrl: string,
+  odooDb: string,
+  odooUsername: string,
+  odooPassword: string
+): Promise<FetchedPdfDetails[]> {
+  console.log(
+    `SERVER_ACTION: Attempting to fetch all POs linked to Sale Order: ${soUserInputName}`
+  );
+  // 1) Authenticate via XML‐RPC
+  const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
+  let uid: number;
+  try {
+    uid = await new Promise((resolve, reject) => {
+      commonClient.methodCall(
+        "authenticate",
+        [odooDb, odooUsername, odooPassword, {}],
+        (err, value) => {
+          if (err) {
+            return reject(
+              new Error(`Odoo authentication failed (POs): ${err.message}`)
+            );
+          }
+          if (!value || typeof value !== "number" || value <= 0) {
+            return reject(
+              new Error("Odoo returned invalid UID while authenticating (POs).")
+            );
+          }
+          resolve(value as number);
+        }
+      );
+    });
+  } catch (authErr) {
+    console.error("SERVER_ACTION:", authErr);
+    throw authErr;
+  }
+
+  // 2) Create an Object‐RPC client
+  const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
+
+  // 3) Search for all purchase.order records whose origin contains the SO name
+  const poSearchDomain = [["origin", "ilike", soUserInputName]];
+  let poRecords: Array<{ id: number; name: string }>;
+  try {
+    poRecords = await new Promise((resolve, reject) => {
+      objectClient.methodCall(
+        "execute_kw",
+        [
+          odooDb,
+          uid,
+          odooPassword,
+          "purchase.order",
+          "search_read",
+          [poSearchDomain],
+          { fields: ["id", "name"], limit: 10 },
+        ],
+        (err, value) => {
+          if (err) {
+            return reject(
+              new Error(`Odoo search_read (POs) failed: ${err.message}`)
+            );
+          }
+          resolve(value as Array<{ id: number; name: string }>);
+        }
+      );
+    });
+  } catch (searchErr) {
+    console.error("SERVER_ACTION: Error searching POs:", searchErr);
+    throw searchErr;
+  }
+
+  if (!poRecords || poRecords.length === 0) {
+    console.warn(
+      `SERVER_ACTION: No Purchase Orders found for origin containing '${soUserInputName}'.`
+    );
+    return [];
+  }
+
+  // 4) For each PO, fetch its PDF attachment via ir.attachment.search_read
+  const results: FetchedPdfDetails[] = [];
+  for (const po of poRecords) {
+    console.log(`SERVER_ACTION: Searching attachment for PO '${po.name}' (id=${po.id})`);
+    const attSearchDomain = [
+      ["res_model", "=", "purchase.order"],
+      ["res_id", "=", po.id],
+      ["mimetype", "=", "application/pdf"],
+    ];
+
+    let attachments: Array<{ id: number; name: string; datas: string }>;
+    try {
+      attachments = await new Promise((resolve, reject) => {
+        objectClient.methodCall(
+          "execute_kw",
+          [
+            odooDb,
+            uid,
+            odooPassword,
+            "ir.attachment",
+            "search_read",
+            [attSearchDomain],
+            { fields: ["id", "name", "datas"], limit: 1 },
+          ],
+          (err, value) => {
+            if (err) {
+              return reject(
+                new Error(`Odoo IR.Attachment search_read failed: ${err.message}`)
+              );
+            }
+            resolve(value as Array<{ id: number; name: string; datas: string }>);
+          }
+        );
+      });
+    } catch (attErr) {
+      console.error("SERVER_ACTION: Error fetching PO attachment:", attErr);
+      continue;
+    }
+
+    if (!attachments || attachments.length === 0) {
+      console.warn(`SERVER_ACTION: No PDF found for PO '${po.name}' (id=${po.id}).`);
+      continue;
+    }
+
+    // 5) Decode & return as Data URI + metadata
+    const att = attachments[0];
+    const binary = Buffer.from(att.datas, "base64");
+    const dataUri = `data:application/pdf;base64,${att.datas}`;
+    results.push({
+      dataUri,
+      fileName: `Purchase_Order_-_${po.name.replace(/[\s/]/g, "_")}.pdf`,
+      originalName: att.name,
+      size: binary.byteLength,
+    });
+  }
+
+  return results;
+}
