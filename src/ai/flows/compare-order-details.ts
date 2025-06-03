@@ -31,7 +31,11 @@ const InternalPromptInputSchema = z.object({
   firstPurchaseOrderPdfDataUri: z.string().optional(),
   hasPurchaseOrders: z.boolean(),
   totalPurchaseOrderCount: z.number(),
-  additionalPurchaseOrderUris: z.array(z.string()),
+  additionalPurchaseOrderUris: z.array(z.string()), // Still useful for {{#each}}
+  // New booleans and count for simplified template logic
+  isSinglePO: z.boolean(),
+  hasAdditionalPOs: z.boolean(),
+  additionalPOCount: z.number(),
 });
 type InternalPromptInput = z.infer<typeof InternalPromptInputSchema>;
 
@@ -114,7 +118,7 @@ Sales Order Document:
 Purchase Order Document(s):
 {{#if hasPurchaseOrders}}
   {{#if firstPurchaseOrderPdfDataUri}} {{! Ensure first PO URI exists before trying to use it }}
-    {{#if (eq totalPurchaseOrderCount 1)}}
+    {{#if isSinglePO}}
       A single Purchase Order document is provided:
       {{media url=firstPurchaseOrderPdfDataUri}}
       You will compare this Purchase Order against the Sales Order.
@@ -123,8 +127,8 @@ Purchase Order Document(s):
       First Purchase Order Document:
       {{media url=firstPurchaseOrderPdfDataUri}}
 
-      {{#if additionalPurchaseOrderUris.length}}
-        Additional Purchase Order Documents ({{additionalPurchaseOrderUris.length}} for context, less detailed focus):
+      {{#if hasAdditionalPOs}}
+        Additional Purchase Order Documents ({{additionalPOCount}} for context, less detailed focus):
         {{#each additionalPurchaseOrderUris}}
           Additional PO (Context): {{media url=this}}
         {{/each}}
@@ -212,7 +216,6 @@ Ensure all fields in the output schema are populated according to your findings.
         threshold: 'BLOCK_ONLY_HIGH',
       },
     ],
-    // Removed customHelpers and handlebarsOptions as they are no longer needed
   }
 });
 
@@ -225,12 +228,16 @@ const compareOrderDetailsFlow = ai.defineFlow(
   async (input): Promise<CompareOrderDetailsOutput> => {
     try {
       const poUris = input.purchaseOrderPdfDataUris || [];
+      const additionalPOs = poUris.slice(1);
       const internalPromptInput: InternalPromptInput = {
         salesOrderPdfDataUri: input.salesOrderPdfDataUri,
         hasPurchaseOrders: poUris.length > 0,
         firstPurchaseOrderPdfDataUri: poUris.length > 0 ? poUris[0] : undefined,
         totalPurchaseOrderCount: poUris.length,
-        additionalPurchaseOrderUris: poUris.slice(1),
+        additionalPurchaseOrderUris: additionalPOs,
+        isSinglePO: poUris.length === 1,
+        hasAdditionalPOs: additionalPOs.length > 0,
+        additionalPOCount: additionalPOs.length,
       };
 
       const { output: aiPermissiveOutput } = await compareOrderDetailsPrompt(internalPromptInput);
