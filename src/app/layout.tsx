@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'EOXS AI COMPARATOR',
+  title: 'EOXS AI comparator',
   description: 'AI-powered tool to compare purchase and sales orders.',
 };
 
