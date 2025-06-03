@@ -25,6 +25,17 @@ const CompareOrderDetailsInputSchema = z.object({
 });
 export type CompareOrderDetailsInput = z.infer<typeof CompareOrderDetailsInputSchema>;
 
+// New internal schema for the prompt after data pre-processing
+const InternalPromptInputSchema = z.object({
+  salesOrderPdfDataUri: z.string(),
+  firstPurchaseOrderPdfDataUri: z.string().optional(),
+  hasPurchaseOrders: z.boolean(),
+  totalPurchaseOrderCount: z.number(),
+  additionalPurchaseOrderUris: z.array(z.string()),
+});
+type InternalPromptInput = z.infer<typeof InternalPromptInputSchema>;
+
+
 const DiscrepancySchema = z.object({
   field: z.string().describe('The general document field with a discrepancy (e.g., PO Number, Overall Discount, Payment Terms, Buyer Name, Shipping Address, or an unmatched product). This is for non-product line items or for flagging products found in one order but not the other.'),
   purchaseOrderValue: z.string().describe('The value from the purchase order document (or the first PO if multiple were provided). For an unmatched SO product, this might be "Desc: [SO Product Description], Qty: [SO Quantity], Unit Price: [SO Unit Price]" or similar if only found in SO, or simply "N/A" or "No PO Provided".'),
@@ -80,7 +91,7 @@ export async function compareOrderDetails(input: CompareOrderDetailsInput): Prom
 const compareOrderDetailsPrompt = ai.definePrompt({
   name: 'compareOrderDetailsPrompt',
   input: {
-    schema: CompareOrderDetailsInputSchema,
+    schema: InternalPromptInputSchema, // Use the new internal schema
   },
   output: {
     schema: AiPermissiveOutputSchema, // Use permissive schema for AI output
@@ -101,20 +112,24 @@ Sales Order Document:
 {{media url=salesOrderPdfDataUri}}
 
 Purchase Order Document(s):
-{{#if purchaseOrderPdfDataUris.length}}
-  {{#if (eq purchaseOrderPdfDataUris.length 1)}}
-    A single Purchase Order document is provided:
-    {{media url=purchaseOrderPdfDataUris.[0]}}
-    You will compare this Purchase Order against the Sales Order.
-  {{else}}
-    Multiple ({{purchaseOrderPdfDataUris.length}}) Purchase Order documents are provided. For this comparison, **focus primarily on the FIRST Purchase Order document listed below** when comparing line items and specific PO values against the Sales Order. You may reference other POs for context if it helps clarify discrepancies or matches related to the first PO, but the detailed values (quantities, prices) reported for 'purchaseOrderValue' or 'poProductDescription' etc., should come from the first PO.
-    First Purchase Order Document:
-    {{media url=purchaseOrderPdfDataUris.[0]}}
+{{#if hasPurchaseOrders}}
+  {{#if firstPurchaseOrderPdfDataUri}} {{! Ensure first PO URI exists before trying to use it }}
+    {{#if (eq totalPurchaseOrderCount 1)}}
+      A single Purchase Order document is provided:
+      {{media url=firstPurchaseOrderPdfDataUri}}
+      You will compare this Purchase Order against the Sales Order.
+    {{else}}
+      Multiple ({{totalPurchaseOrderCount}}) Purchase Order documents are provided. For this comparison, **focus primarily on the FIRST Purchase Order document listed below** when comparing line items and specific PO values against the Sales Order. You may reference other POs for context if it helps clarify discrepancies or matches related to the first PO, but the detailed values (quantities, prices) reported for 'purchaseOrderValue' or 'poProductDescription' etc., should come from the first PO.
+      First Purchase Order Document:
+      {{media url=firstPurchaseOrderPdfDataUri}}
 
-    Additional Purchase Order Documents (for context, less detailed focus):
-    {{#each (slice purchaseOrderPdfDataUris 1)}}
-      Additional PO (Context): {{media url=this}}
-    {{/each}}
+      {{#if additionalPurchaseOrderUris.length}}
+        Additional Purchase Order Documents ({{additionalPurchaseOrderUris.length}} for context, less detailed focus):
+        {{#each additionalPurchaseOrderUris}}
+          Additional PO (Context): {{media url=this}}
+        {{/each}}
+      {{/if}}
+    {{/if}}
   {{/if}}
 {{else}}
   No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Note the absence of a PO in your summary.
@@ -197,38 +212,34 @@ Ensure all fields in the output schema are populated according to your findings.
         threshold: 'BLOCK_ONLY_HIGH',
       },
     ],
-    customHelpers: {
-      slice: (array: any[], start: number) => array.slice(start),
-      eq: (a: any, b: any) => a === b,
-    },
-    handlebarsOptions: {
-      knownHelpersOnly: false,
-    }
+    // Removed customHelpers and handlebarsOptions as they are no longer needed
   }
 });
 
 const compareOrderDetailsFlow = ai.defineFlow(
   {
     name: 'compareOrderDetailsFlow',
-    inputSchema: CompareOrderDetailsInputSchema,
+    inputSchema: CompareOrderDetailsInputSchema, // External input remains the same
     outputSchema: StrictCompareOrderDetailsOutputSchema, // Flow returns the strict schema
   },
   async (input): Promise<CompareOrderDetailsOutput> => {
     try {
-      // Helper to check if purchaseOrderPdfDataUris is defined and not empty for the prompt
-      const anInputForPrompt = {
-        ...input,
-        purchaseOrderPdfDataUris: input.purchaseOrderPdfDataUris || [], // Ensure it's an array
+      const poUris = input.purchaseOrderPdfDataUris || [];
+      const internalPromptInput: InternalPromptInput = {
+        salesOrderPdfDataUri: input.salesOrderPdfDataUri,
+        hasPurchaseOrders: poUris.length > 0,
+        firstPurchaseOrderPdfDataUri: poUris.length > 0 ? poUris[0] : undefined,
+        totalPurchaseOrderCount: poUris.length,
+        additionalPurchaseOrderUris: poUris.slice(1),
       };
-      const { output: aiPermissiveOutput } = await compareOrderDetailsPrompt(anInputForPrompt);
+
+      const { output: aiPermissiveOutput } = await compareOrderDetailsPrompt(internalPromptInput);
 
       if (!aiPermissiveOutput) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output payload.');
-        // Throw an error that will be caught by the main try/catch block
         throw new Error('AI model failed to return valid comparison data. Please check the documents or try again.');
       }
       
-      // Construct the final output, ensuring all required fields are present and correctly typed.
       const finalOutput: CompareOrderDetailsOutput = {
         discrepancies: Array.isArray(aiPermissiveOutput.discrepancies) ? aiPermissiveOutput.discrepancies : [],
         matchedItems: Array.isArray(aiPermissiveOutput.matchedItems) ? aiPermissiveOutput.matchedItems : [],
@@ -240,20 +251,13 @@ const compareOrderDetailsFlow = ai.defineFlow(
     } catch (error: unknown) { 
       console.error("Error in compareOrderDetailsFlow: ", error);
       if (error instanceof Error) {
-        // If it's already an Error object, re-throw it.
-        // Specific error message construction for client can be handled by the calling server action.
         if (error.message.includes("is not found for API version") || error.message.includes("API key not valid") || error.message.includes("Permission denied")) {
             throw new Error(`AI Model/API Key Error: ${error.message}. Please check model availability and API key permissions.`);
         }
         throw error;
       }
-      // If it's not an Error object, wrap it in one.
       throw new Error(String(error));
     }
   }
 );
- 
 
-    
-
-    
