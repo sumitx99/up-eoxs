@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 'use client';
 
@@ -100,17 +101,17 @@ function OrderComparatorClientContent() {
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
-        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+        return <CheckCircle2 className="h-4 w-4 text-primary" />;
       case 'MISMATCH_QUANTITY':
       case 'MISMATCH_UNIT_PRICE':
       case 'MISMATCH_TOTAL_PRICE':
       case 'MISMATCH_DESCRIPTION':
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
-        return <XCircle className="h-4 w-4 text-red-600" />;
+        return <XCircle className="h-4 w-4 text-destructive" />;
       case 'PO_ONLY':
         return <MinusCircle className="h-4 w-4 text-orange-500" />;
       case 'SO_ONLY':
-        return <PackagePlus className="h-4 w-4 text-blue-500" />;
+        return <PackagePlus className="h-4 w-4 text-accent" />;
       default:
         return <HelpCircle className="h-4 w-4 text-muted-foreground" />;
     }
