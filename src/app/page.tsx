@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, Info, MinusCircle, PackagePlus, HelpCircle, ListChecks, FileText, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, Info, MinusCircle, PackagePlus, HelpCircle, CheckCircle2, XCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
@@ -246,8 +246,8 @@ function OrderComparatorClientContent() {
                               <TableBody>
                                 {comparisonResult.matchedItems.map((item, index) => (
                                   <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={`text-xs ${index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}`}>
-                                    <TableCell className="font-medium py-1.5 px-2">{item.field}</TableCell>
-                                    <TableCell className="py-1.5 px-2">{item.value}</TableCell>
+                                    <TableCell className="font-medium py-1.5 px-2 whitespace-pre-line">{item.field}</TableCell>
+                                    <TableCell className="py-1.5 px-2 whitespace-pre-line">{item.value}</TableCell>
                                     <TableCell className="text-center py-1.5 px-2">
                                       <span className="capitalize text-xs">{item.matchQuality || 'Exact'}</span>
                                     </TableCell>
