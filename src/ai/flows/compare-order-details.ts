@@ -4,7 +4,8 @@
 'use server';
 
 /**
- * @fileOverview Compares product names, quantities, discounts, and taxes between a purchase order and a sales order document (PDF, image, CSV, or Excel) using AI.
+ * @fileOverview Compares product names, quantities, discounts, and taxes between a sales order document and one or more purchase order documents (PDF, image, CSV, or Excel) using AI.
+ * If multiple Purchase Orders are provided, the AI is currently instructed to focus on the first one for detailed comparison against the Sales Order.
  * Identifies both discrepancies and matching items for overall fields, and provides a detailed comparison for product line items.
  *
  * - compareOrderDetails - Compares order details from document content and identifies discrepancies, matches, and detailed product line comparisons.
@@ -19,14 +20,14 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const CompareOrderDetailsInputSchema = z.object({
-  purchaseOrder: z.string().describe("The purchase order document (PDF, image, CSV, or Excel) as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
-  salesOrder: z.string().describe("The sales order document (PDF, image, CSV, or Excel) as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
+  salesOrderPdfDataUri: z.string().describe("The sales order document (PDF, image, CSV, or Excel) as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
+  purchaseOrderPdfDataUris: z.array(z.string()).describe("An array of purchase order documents (PDF, image, CSV, or Excel) as data URIs. Expected format: 'data:<mimetype>;base64,<encoded_data>'. Can be an empty array if no POs are linked or found."),
 });
 export type CompareOrderDetailsInput = z.infer<typeof CompareOrderDetailsInputSchema>;
 
 const DiscrepancySchema = z.object({
   field: z.string().describe('The general document field with a discrepancy (e.g., PO Number, Overall Discount, Payment Terms, Buyer Name, Shipping Address, or an unmatched product). This is for non-product line items or for flagging products found in one order but not the other.'),
-  purchaseOrderValue: z.string().describe('The value from the purchase order document. For an unmatched SO product, this might be "Desc: [SO Product Description], Qty: [SO Quantity], Unit Price: [SO Unit Price]" or similar if only found in SO, or simply "N/A".'),
+  purchaseOrderValue: z.string().describe('The value from the purchase order document (or the first PO if multiple were provided). For an unmatched SO product, this might be "Desc: [SO Product Description], Qty: [SO Quantity], Unit Price: [SO Unit Price]" or similar if only found in SO, or simply "N/A" or "No PO Provided".'),
   salesOrderValue: z.string().describe('The value from the sales order document. For an unmatched PO product, this might be "Desc: [PO Product Description], Qty: [PO Quantity], Unit Price: [PO Unit Price]" or similar if only found in PO, or simply "N/A".'),
   reason: z.string().describe('The reason for the discrepancy, or why it might be a mismatch (e.g., "Quantities differ", "Product found only in PO", "Buyer names differ").'),
 });
@@ -35,22 +36,22 @@ export type Discrepancy = z.infer<typeof DiscrepancySchema>;
 
 const MatchedItemSchema = z.object({
   field: z.string().describe('The general document field that matches (e.g., PO Number, Vendor Name, Order Date). This is for non-product line items.'),
-  value: z.string().describe('The common value found in both the purchase order and sales order documents.'),
+  value: z.string().describe('The common value found in both the sales order and the (first) purchase order document.'),
   matchQuality: z.enum(['exact', 'normalized', 'inferred']).optional().describe('The quality of the match (e.g., exact string match, match after normalization, or inferred match based on context). Default to "exact" if not specified.'),
 });
 export type MatchedItem = z.infer<typeof MatchedItemSchema>;
 
 const ProductLineItemComparisonSchema = z.object({
-  poProductDescription: z.string().optional().describe('Product name, description, or SKU from the Purchase Order line item. Use "N/A" if the item is SO_ONLY or if this specific detail is not present/extractable from the PO line item.'),
-  poQuantity: z.string().optional().describe('Quantity from the Purchase Order line item. Use "N/A" if the item is SO_ONLY or if this specific detail is not present/extractable.'),
-  poUnitPrice: z.string().optional().describe('Unit price from the Purchase Order line item. Use "N/A" if the item is SO_ONLY or if this specific detail is not present/extractable.'),
-  poTotalPrice: z.string().optional().describe('Total price for the line item from the Purchase Order. Use "N/A" if the item is SO_ONLY or if this specific detail is not present/extractable.'),
+  poProductDescription: z.string().optional().describe('Product name, description, or SKU from the Purchase Order line item (first PO if multiple provided). Use "N/A" if the item is SO_ONLY, no PO was provided, or if this specific detail is not present/extractable from the PO line item.'),
+  poQuantity: z.string().optional().describe('Quantity from the Purchase Order line item. Use "N/A" if the item is SO_ONLY, no PO provided, or if this specific detail is not present/extractable.'),
+  poUnitPrice: z.string().optional().describe('Unit price from the Purchase Order line item. Use "N/A" if the item is SO_ONLY, no PO provided, or if this specific detail is not present/extractable.'),
+  poTotalPrice: z.string().optional().describe('Total price for the line item from the Purchase Order. Use "N/A" if the item is SO_ONLY, no PO provided, or if this specific detail is not present/extractable.'),
   soProductDescription: z.string().optional().describe('Product name, description, or SKU from the Sales Order line item. Use "N/A" if the item is PO_ONLY or if this specific detail is not present/extractable from the SO line item.'),
   soQuantity: z.string().optional().describe('Quantity from the Sales Order line item. Use "N/A" if the item is PO_ONLY or if this specific detail is not present/extractable.'),
   soUnitPrice: z.string().optional().describe('Unit price from the Sales Order line item. Use "N/A" if the item is PO_ONLY or if this specific detail is not present/extractable.'),
   soTotalPrice: z.string().optional().describe('Total price for the line item from the Sales Order. Use "N/A" if the item is PO_ONLY or if this specific detail is not present/extractable.'),
   status: z.enum(['MATCHED', 'MISMATCH_QUANTITY', 'MISMATCH_UNIT_PRICE', 'MISMATCH_TOTAL_PRICE', 'MISMATCH_DESCRIPTION', 'PO_ONLY', 'SO_ONLY', 'PARTIAL_MATCH_DETAILS_DIFFER']).describe('The comparison status for this product line item pairing.'),
-  comparisonNotes: z.string().describe('AI\'s brief notes explaining the status or highlighting specific differences for this line item (e.g., "Quantities differ", "Unit prices mismatch", "Product found only in PO").'),
+  comparisonNotes: z.string().describe('AI\'s brief notes explaining the status or highlighting specific differences for this line item (e.g., "Quantities differ", "Unit prices mismatch", "Product found only in PO", "No PO document provided for comparison").'),
 });
 export type ProductLineItemComparison = z.infer<typeof ProductLineItemComparisonSchema>;
 
@@ -59,7 +60,7 @@ const StrictCompareOrderDetailsOutputSchema = z.object({
   discrepancies: z.array(DiscrepancySchema).describe('An array of general discrepancies found (e.g., for header fields, overall totals, terms, or unmatched products). This should always be an array, even if empty.'),
   matchedItems: z.array(MatchedItemSchema).describe('An array of general items/fields that match (e.g., for header fields). This should always be an array, even if empty. Strive to find matches for common header fields.'),
   productLineItemComparisons: z.array(ProductLineItemComparisonSchema).describe('An array detailing the comparison of each product line item found in the documents. This should always be an array, even if empty.'),
-  summary: z.string().describe('A summary of the overall comparison, highlighting key discrepancies, confirmed matches, and product line item findings. If any limitations were encountered processing the entirety of any document, this must be noted here.'),
+  summary: z.string().describe('A summary of the overall comparison, highlighting key discrepancies, confirmed matches, and product line item findings. If any limitations were encountered processing the entirety of any document, or if no PO was provided, this must be noted here.'),
 });
 export type CompareOrderDetailsOutput = z.infer<typeof StrictCompareOrderDetailsOutputSchema>;
 
@@ -68,7 +69,7 @@ const AiPermissiveOutputSchema = z.object({
   discrepancies: z.array(DiscrepancySchema).optional().describe('An array of general discrepancies found (e.g., for header fields, overall totals, terms, or unmatched products).'),
   matchedItems: z.array(MatchedItemSchema).optional().describe('An array of general items/fields that match (e.g., for header fields). Strive to find matches for common header fields.'),
   productLineItemComparisons: z.array(ProductLineItemComparisonSchema).optional().describe('An array detailing the comparison of each product line item found in the documents.'),
-  summary: z.string().optional().describe('A summary of the overall comparison, highlighting key discrepancies, confirmed matches, and product line item findings. If any limitations were encountered processing the entirety of any document, this must be noted here.'),
+  summary: z.string().optional().describe('A summary of the overall comparison, highlighting key discrepancies, confirmed matches, and product line item findings. If any limitations were encountered processing the entirety of any document, or if no PO was provided, this must be noted here.'),
 });
 
 
@@ -84,71 +85,91 @@ const compareOrderDetailsPrompt = ai.definePrompt({
   output: {
     schema: AiPermissiveOutputSchema, // Use permissive schema for AI output
   },
-  prompt: `You are an AI assistant specializing in comparing purchase orders (POs) and sales orders (SOs) provided as various document types.
-Your task is to meticulously analyze the **entire content** of both documents, from start to finish, including all pages, headers, footers, and line items.
-It is absolutely critical for the accuracy of this task that every piece of information, from all pages and all sections of both documents, is meticulously reviewed and considered. Incomplete analysis or overlooking any part of the documents will lead to incorrect and unusable results. Do not stop processing part-way through a document.
+  prompt: `You are an AI assistant specializing in comparing sales orders (SOs) with associated purchase orders (POs) provided as various document types.
+Your task is to meticulously analyze the **entire content** of all provided documents, from start to finish, including all pages, headers, footers, and line items.
+It is absolutely critical for the accuracy of this task that every piece of information, from all pages and all sections of all documents, is meticulously reviewed and considered. Incomplete analysis or overlooking any part of the documents will lead to incorrect and unusable results. Do not stop processing part-way through a document.
 
 The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) format.
 - If the document is an image, perform OCR to extract textual content.
 - If the document is a CSV or Excel file, parse the tabular data to identify order details. Look for headers like 'Product', 'Item', 'Quantity', 'Price', 'Amount', 'Discount', 'Tax', 'PO Number', 'Buyer', 'Vendor', 'Payment Terms', etc.
 - If the document is a PDF, extract its textual content thoroughly from all pages.
 
-Analyze the content of the following Purchase Order document and Sales Order document:
+Analyze the content of the following Sales Order document and any provided Purchase Order documents:
 Ensure you process all pages and sections of each document.
-Purchase Order Document:
-{{media url=purchaseOrder}}
 
 Sales Order Document:
-{{media url=salesOrder}}
+{{media url=salesOrderPdfDataUri}}
+
+Purchase Order Document(s):
+{{#if purchaseOrderPdfDataUris.length}}
+  {{#if (eq purchaseOrderPdfDataUris.length 1)}}
+    A single Purchase Order document is provided:
+    {{media url=purchaseOrderPdfDataUris.[0]}}
+    You will compare this Purchase Order against the Sales Order.
+  {{else}}
+    Multiple ({{purchaseOrderPdfDataUris.length}}) Purchase Order documents are provided. For this comparison, **focus primarily on the FIRST Purchase Order document listed below** when comparing line items and specific PO values against the Sales Order. You may reference other POs for context if it helps clarify discrepancies or matches related to the first PO, but the detailed values (quantities, prices) reported for 'purchaseOrderValue' or 'poProductDescription' etc., should come from the first PO.
+    First Purchase Order Document:
+    {{media url=purchaseOrderPdfDataUris.[0]}}
+
+    Additional Purchase Order Documents (for context, less detailed focus):
+    {{#each (slice purchaseOrderPdfDataUris 1)}}
+      Additional PO (Context): {{media url=this}}
+    {{/each}}
+  {{/if}}
+{{else}}
+  No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Note the absence of a PO in your summary.
+{{/if}}
 
 Based on your analysis of the document contents, provide the following in a valid JSON format:
 
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
+   (Instructions for this section remain largely the same, but remember to specify "first PO" or "No PO Provided" where applicable)
 
    **A. Document-Level Field Discrepancies:**
-      - Meticulously compare **general document fields that are NOT product line items**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
+      - Meticulously compare **general document fields that are NOT product line items** between the Sales Order and the **first Purchase Order (if provided)**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
       - **Pay extremely close attention to Buyer/Customer names and their full addresses (Shipping and Billing). Even minor differences in names (e.g., 'Titan Steel Works' vs. 'Steel America') or any significant differences in address components (street, city, state, zip code) MUST be flagged as discrepancies.** Do not assume entities are the same if their names or addresses show such variations.
-      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address", "Buyer Name"), 'purchaseOrderValue', 'salesOrderValue', and 'reason' for the discrepancy (e.g., "Buyer names differ", "Shipping addresses do not match").
+      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address", "Buyer Name"), 'purchaseOrderValue' (from first PO, or "No PO Provided"), 'salesOrderValue', and 'reason' for the discrepancy (e.g., "Buyer names differ", "Shipping addresses do not match").
 
    **B. Unmatched Product Line Item Discrepancies:**
       - During your detailed product line item analysis (detailed in section 2 below), you will identify some products as 'PO_ONLY' or 'SO_ONLY'.
       - For these **unmatched products**, you must also add an entry to this 'discrepancies' array.
-      - For items found in the PO but not in the SO: 
+      - For items found in the **first PO (if provided)** but not in the SO: 
         'field': "Unmatched PO Product: [Product Name/SKU from PO line item]", 
         'purchaseOrderValue': "Desc: [Product Name/SKU from PO line item], Qty: [Quantity from PO line item], Unit Price: [Unit Price from PO line item]", 
         'salesOrderValue': "Not found in SO", 
         'reason': "Product listed in Purchase Order only."
-      - For items found in the SO but not in the PO: 
+      - For items found in the SO but not in the **first PO (or if no PO provided)**: 
         'field': "Unmatched SO Product: [Product Name/SKU from SO line item]", 
-        'purchaseOrderValue': "Not found in PO", 
+        'purchaseOrderValue': "Not found in PO" (or "No PO Provided"), 
         'salesOrderValue': "Desc: [Product Name/SKU from SO line item], Qty: [Quantity from SO line item], Unit Price: [Unit Price from SO line item]", 
-        'reason': "Product listed in Sales Order only."
+        'reason': "Product listed in Sales Order only (or no PO to compare against)."
       - **Crucially, ensure that every product identified with a status of 'PO_ONLY' or 'SO_ONLY' during the detailed product line item analysis (section 2) results in a corresponding entry in this 'discrepancies' array (section 1).**
 
    **C. Matched General Document Fields:**
-      - Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Vendor Name, Order Dates, etc.
+      - Identify general matching items/fields (non-product line items) between the SO and the **first PO (if provided)**. For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'. Strive to find matches for common header fields such as PO Number, Vendor Name, Order Dates, etc.
       - **For critical fields like Buyer names and full addresses, only list them as 'matchedItems' if they are an exact or near-exact text match (use 'exact' for 'matchQuality'). If there are notable differences, they should be listed as discrepancies instead.** Avoid using 'inferred' for these specific fields unless the evidence is overwhelmingly strong across multiple related sub-fields and you explicitly state the basis of this strong inference in the 'comparisonNotes' or overall 'summary'. If in doubt about a match for such critical fields, list it as a discrepancy.
 
 **2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
-   - Perform a detailed comparison of product line items. For each product line item found in the PO, try to find its corresponding item in the SO (and vice-versa). Strive to find the best possible match for product descriptions, even if there are minor wording differences, acronyms, or variations in item codes/SKUs. Focus on semantic similarity where appropriate.
+   - Perform a detailed comparison of product line items between the SO and the **first PO (if one was provided and processed)**. For each product line item found in the SO, try to find its corresponding item in the first PO (and vice-versa). Strive to find the best possible match for product descriptions, even if there are minor wording differences, acronyms, or variations in item codes/SKUs. Focus on semantic similarity where appropriate.
+   - If no PO was provided, all SO line items should be marked as 'SO_ONLY'.
    - For each identified product line item pairing (or an item found only in one document):
      - Once a potential product pairing is identified based on description/SKU, you *must* then thoroughly compare their respective quantities, unit prices, and total prices to determine the correct status. Do not assume a full match based on description alone; all corresponding details for that line item must be scrutinized.
-     - Extract 'poProductDescription', 'poQuantity', 'poUnitPrice', 'poTotalPrice' from the PO. Use "N/A" if the item is SO_ONLY or if a specific detail is not present/extractable from the PO line item.
+     - Extract 'poProductDescription', 'poQuantity', 'poUnitPrice', 'poTotalPrice' from the **first PO (if available)**. Use "N/A" or "No PO Provided" if the item is SO_ONLY, no PO was provided, or if a specific detail is not present/extractable from the PO line item.
      - Extract 'soProductDescription', 'soQuantity', 'soUnitPrice', 'soTotalPrice' from the SO. Use "N/A" if the item is PO_ONLY or if a specific detail is not present/extractable from the SO line item.
      - Determine a 'status':
-       - 'MATCHED': If description, quantity, and prices (unit and total, or equivalent if one is missing but calculable) appear to match closely or are equivalent.
+       - 'MATCHED': If description, quantity, and prices (unit and total, or equivalent if one is missing but calculable) appear to match closely or are equivalent between SO and first PO.
        - 'MISMATCH_QUANTITY': If quantities differ significantly.
        - 'MISMATCH_UNIT_PRICE': If unit prices differ significantly.
        - 'MISMATCH_TOTAL_PRICE': If total line item prices differ significantly (and unit price/qty might also be causes).
        - 'MISMATCH_DESCRIPTION': If products seem related (e.g., similar SKUs) but descriptions have notable, irreconcilable differences.
-       - 'PO_ONLY': If the item is found only in the Purchase Order and has no corresponding item in the Sales Order.
-       - 'SO_ONLY': If the item is found only in the Sales Order and has no corresponding item in the Purchase Order.
+       - 'PO_ONLY': If the item is found only in the first Purchase Order and has no corresponding item in the Sales Order.
+       - 'SO_ONLY': If the item is found only in the Sales Order and has no corresponding item in the first Purchase Order (or if no PO was provided).
        - 'PARTIAL_MATCH_DETAILS_DIFFER': If it's likely the same core product but some key details (other than quantity or price that would trigger a specific mismatch status) are inconsistent, or if the match is inferred with lower confidence.
-     - Provide 'comparisonNotes': A brief explanation for the status (e.g., "Quantities differ (PO: 5, SO: 4)", "Unit prices mismatch", "Product found only in PO", "Description slightly different but quantities match").
-   - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document, this array should be empty.
+     - Provide 'comparisonNotes': A brief explanation for the status (e.g., "Quantities differ (PO: 5, SO: 4)", "Unit prices mismatch", "Product found only in PO", "SO item, no PO provided for comparison").
+   - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document (or only in SO and no PO provided), this array should reflect that (e.g., list SO items as SO_ONLY, or be empty if SO is also empty).
 
 **3. Summary ('summary' field):**
-   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched, 1 had quantity mismatch, 1 PO item not in SO"). If no general, non-product related discrepancies were found, explicitly state this. If any limitations were encountered processing the entirety of either document, you MUST explicitly state this limitation in your summary.
+   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched with first PO, 1 had quantity mismatch, 1 PO item not in SO"). If no PO was provided, state this clearly in the summary (e.g., "Sales Order processed. No Purchase Order was provided for comparison; all SO items are listed as SO_ONLY."). If any limitations were encountered processing the entirety of any document, you MUST explicitly state this limitation in your summary.
 
 **Important Output Structure:**
 - The 'discrepancies' array should always be present as a key in the root JSON object. If no general discrepancies are found, its value should be an empty array (\`[]\`).
@@ -176,6 +197,11 @@ Ensure all fields in the output schema are populated according to your findings.
         threshold: 'BLOCK_ONLY_HIGH',
       },
     ],
+    // Added helper for handlebars to slice array
+    customHelpers: {
+      slice: (array: any[], start: number) => array.slice(start),
+      eq: (a: any, b: any) => a === b,
+    }
   }
 });
 
@@ -187,7 +213,12 @@ const compareOrderDetailsFlow = ai.defineFlow(
   },
   async (input): Promise<CompareOrderDetailsOutput> => {
     try {
-      const { output: aiPermissiveOutput } = await compareOrderDetailsPrompt(input);
+      // Helper to check if purchaseOrderPdfDataUris is defined and not empty for the prompt
+      const anInputForPrompt = {
+        ...input,
+        purchaseOrderPdfDataUris: input.purchaseOrderPdfDataUris || [], // Ensure it's an array
+      };
+      const { output: aiPermissiveOutput } = await compareOrderDetailsPrompt(anInputForPrompt);
 
       if (!aiPermissiveOutput) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output payload.');
@@ -220,3 +251,5 @@ const compareOrderDetailsFlow = ai.defineFlow(
   }
 );
  
+
+    
