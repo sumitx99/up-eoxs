@@ -104,13 +104,13 @@ function OrderComparatorClientContent() {
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
-        return <span>✅</span>;
+        return <span role="img" aria-label="Matched">✅</span>;
       case 'MISMATCH_QUANTITY':
       case 'MISMATCH_UNIT_PRICE':
       case 'MISMATCH_TOTAL_PRICE':
       case 'MISMATCH_DESCRIPTION':
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
-        return <span>❌</span>;
+        return <span role="img" aria-label="Mismatch">❌</span>;
       case 'PO_ONLY':
         return <MinusCircle className="h-5 w-5 text-orange-500" />;
       case 'SO_ONLY':
@@ -131,7 +131,7 @@ function OrderComparatorClientContent() {
             alt="EOXS Logo"
             width={128} 
             height={62} 
-            className="object-contain"
+            className="object-contain border border-red-500" // Added diagnostic border
             priority 
           />
         </div>
@@ -406,7 +406,5 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
-
-    
 
     
