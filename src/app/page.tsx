@@ -12,7 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle, ListChecks, FileText, CheckCircle2, XCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
@@ -42,7 +43,6 @@ function SubmitButton({ isSalesOrderNameEmpty }: SubmitButtonProps) {
   );
 }
 
-// Define initialState directly in the client component
 const initialState: CompareActionState = {
   error: null,
   data: null,
@@ -67,9 +67,8 @@ function OrderComparatorClientContent() {
   }, [searchParams, setSalesOrderName]);
 
   useEffect(() => {
-    // This effect handles the outcome of the server action
     if (formState.error || formState.data) {
-      setIsLoading(false); // Stop loading when we have a result or an error
+      setIsLoading(false); 
     }
 
     if (formState.error) {
@@ -93,7 +92,6 @@ function OrderComparatorClientContent() {
   }, [formState, toast]);
 
   const handleFormSubmit = () => {
-    // Trigger loading state when form is about to be submitted
     setIsLoading(true);
     setError(null);
     setComparisonResult(null);
@@ -102,13 +100,13 @@ function OrderComparatorClientContent() {
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
-        return <span>✅</span>;
+        return <CheckCircle2 className="h-5 w-5 text-green-600" />;
       case 'MISMATCH_QUANTITY':
       case 'MISMATCH_UNIT_PRICE':
       case 'MISMATCH_TOTAL_PRICE':
       case 'MISMATCH_DESCRIPTION':
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
-        return <span>❌</span>;
+        return <XCircle className="h-5 w-5 text-red-600" />;
       case 'PO_ONLY':
         return <MinusCircle className="h-5 w-5 text-orange-500" />;
       case 'SO_ONLY':
@@ -143,7 +141,7 @@ function OrderComparatorClientContent() {
                     Input Sales Order Identifier
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    Provide Sales Order name/sequence to fetch both SO and linked PO for comparison.
+                    Provide Sales Order name/sequence to fetch both SO and linked PO(s) for comparison.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -163,7 +161,7 @@ function OrderComparatorClientContent() {
                           className="w-full focus:ring-primary focus:border-primary"
                           required
                         />
-                         <p className="text-xs text-muted-foreground">Enter the Sales Order name. The system will attempt to fetch this SO's PDF and the PDF of the first Purchase Order linked to it.</p>
+                         <p className="text-xs text-muted-foreground">Enter the Sales Order name. The system will attempt to fetch this SO's PDF and PDFs of Purchase Orders linked to it.</p>
                       </div>
                     </CardContent>
                     <CardFooter>
@@ -177,9 +175,11 @@ function OrderComparatorClientContent() {
 
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="text-2xl">Comparison Report</CardTitle>
+              <CardTitle className="text-2xl">
+                Comparison Report {comparisonResult ? `for ${salesOrderName}` : ''}
+              </CardTitle>
               <CardDescription>
-                Review the comparison summary, general matches, discrepancies, and product line item details.
+                Review the AI-powered comparison between the Sales Order and linked Purchase Order(s).
               </CardDescription>
             </CardHeader>
             <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col space-y-6">
@@ -198,130 +198,38 @@ function OrderComparatorClientContent() {
                 </Alert>
               )}
               {!isLoading && !error && comparisonResult && (
-                <>
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
-                      <BadgeHelp className="mr-2 h-6 w-6 text-primary" /> AI Summary
-                    </h3>
-                    <p className="text-sm text-muted-foreground bg-secondary p-3 rounded-md whitespace-pre-wrap">
-                      {comparisonResult.summary || 'No summary provided.'}
-                    </p>
-                  </div>
+                <Tabs defaultValue="line-items" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 md:grid-cols-2 mb-4">
+                    <TabsTrigger value="line-items" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary">
+                      <PackageSearch className="mr-2 h-5 w-5" /> Product Line Item Comparison
+                    </TabsTrigger>
+                    <TabsTrigger value="summary-fields" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary">
+                      <ListChecks className="mr-2 h-5 w-5" /> Summary & General Fields
+                    </TabsTrigger>
+                  </TabsList>
 
-                  <Accordion type="multiple" className="w-full" defaultValue={["matched-items", "discrepancies", "product-line-items"]}>
-                    <AccordionItem value="matched-items">
-                      <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
-                        <div className="flex items-center">
-                          <FileKey2 className="mr-2 h-6 w-6 text-blue-600" />
-                          General Matched Fields ({comparisonResult.matchedItems?.length || 0})
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        {(comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0) ? (
-                          <div className="border rounded-md overflow-hidden max-h-[200px] overflow-y-auto">
-                            <Table>
-                              <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                                <TableRow>
-                                  <TableHead className="font-semibold w-[45%]">Field</TableHead>
-                                  <TableHead className="font-semibold w-[35%]">Matched Value</TableHead>
-                                  <TableHead className="font-semibold w-[20%] text-center">Quality</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {comparisonResult.matchedItems.map((item, index) => (
-                                  <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
-                                    <TableCell className="font-medium py-2 px-3 text-sm">{item.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm">{item.value}</TableCell>
-                                    <TableCell className="text-center py-2 px-3 text-sm">
-                                      <span className="capitalize">{item.matchQuality || 'Exact'}</span>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ) : (
-                          <Alert variant="default" className="mt-2 text-sm">
-                            <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No General Matched Fields Identified.</AlertTitle>
-                            <AlertDescription>The AI did not find any general fields that match between the two documents.</AlertDescription>
-                          </Alert>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-
-                    <AccordionItem value="discrepancies">
-                      <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
-                        <div className="flex items-center">
-                           <AlertCircle className="mr-2 h-6 w-6 text-destructive" />
-                           General Discrepancies ({comparisonResult.discrepancies?.length || 0})
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        {(comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0) ? (
-                          <div className="border rounded-md overflow-hidden max-h-[200px] overflow-y-auto">
-                            <Table>
-                              <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                                <TableRow>
-                                  <TableHead className="font-semibold w-[30%]">Field</TableHead>
-                                  <TableHead className="font-semibold w-[27%]">PO Value</TableHead>
-                                  <TableHead className="font-semibold w-[27%]">SO Value</TableHead>
-                                  <TableHead className="font-semibold w-[16%] text-center">Reason</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {comparisonResult.discrepancies.map((d, index) => (
-                                  <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
-                                    <TableCell className="font-medium py-2 px-3 text-sm">{d.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm">{d.purchaseOrderValue}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm">{d.salesOrderValue}</TableCell>
-                                    <TableCell className="text-center py-2 px-3 text-sm">
-                                      <Tooltip delayDuration={100}>
-                                        <TooltipTrigger asChild>
-                                          <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
-                                        </TooltipTrigger>
-                                        <TooltipContent className="bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg max-w-xs">
-                                          <p className="font-semibold">Discrepancy Reason:</p>
-                                          <p className="text-sm">{d.reason || 'No specific reason provided.'}</p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ) : (
-                           <Alert variant="default" className="mt-2 text-sm">
-                            <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No General Discrepancies Found.</AlertTitle>
-                            <AlertDescription>The AI did not find any general discrepancies between the two documents.</AlertDescription>
-                          </Alert>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-
-                    <AccordionItem value="product-line-items">
-                      <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
-                        <div className="flex items-center">
-                          <PackageSearch className="mr-2 h-6 w-6 text-purple-600" />
-                          Product Line Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
+                  <TabsContent value="line-items">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-xl flex items-center">
+                           <PackageSearch className="mr-2 h-6 w-6 text-purple-600" /> Product Line Items
+                        </CardTitle>
+                        <CardDescription>Detailed comparison of product lines between the SO and PO(s).</CardDescription>
+                      </CardHeader>
+                      <CardContent>
                         {(comparisonResult.productLineItemComparisons && comparisonResult.productLineItemComparisons.length > 0) ? (
                           <div className="border rounded-md overflow-hidden max-h-[400px] overflow-y-auto">
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
                                   <TableHead className="font-semibold text-xs w-[15%]">PO Product</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[7%]">PO Qty</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">PO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">PO Total</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[7%] text-center">PO Qty</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">PO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">PO Total</TableHead>
                                   <TableHead className="font-semibold text-xs w-[15%]">SO Product</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[7%]">SO Qty</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">SO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[10%]">SO Total</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[7%] text-center">SO Qty</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">SO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[10%] text-right">SO Total</TableHead>
                                   <TableHead className="font-semibold text-xs w-[16%] text-center">Status / Notes</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -359,16 +267,126 @@ function OrderComparatorClientContent() {
                             <AlertDescription>The AI did not identify or compare specific product line items from the documents.</AlertDescription>
                           </Alert>
                         )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="summary-fields">
+                    <div className="space-y-6">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-xl flex items-center">
+                            <FileText className="mr-2 h-6 w-6 text-primary" /> AI Summary
+                          </CardTitle>
+                          <CardDescription>Overall summary from the AI comparison.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-muted-foreground bg-secondary p-3 rounded-md whitespace-pre-wrap">
+                            {comparisonResult.summary || 'No summary provided.'}
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                           <CardTitle className="text-xl flex items-center">
+                             <FileKey2 className="mr-2 h-6 w-6 text-blue-600" /> General Matched Fields
+                           </CardTitle>
+                           <CardDescription>Fields that matched between the Sales Order and Purchase Order(s).</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {(comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0) ? (
+                            <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
+                              <Table>
+                                <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                                  <TableRow>
+                                    <TableHead className="font-semibold w-[45%]">Field</TableHead>
+                                    <TableHead className="font-semibold w-[35%]">Matched Value</TableHead>
+                                    <TableHead className="font-semibold w-[20%] text-center">Quality</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {comparisonResult.matchedItems.map((item, index) => (
+                                    <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
+                                      <TableCell className="font-medium py-2 px-3 text-sm">{item.field}</TableCell>
+                                      <TableCell className="py-2 px-3 text-sm">{item.value}</TableCell>
+                                      <TableCell className="text-center py-2 px-3 text-sm">
+                                        <span className="capitalize">{item.matchQuality || 'Exact'}</span>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          ) : (
+                            <Alert variant="default" className="mt-2 text-sm">
+                              <Info className="h-4 w-4" />
+                              <AlertTitle className="text-base">No General Matched Fields Identified.</AlertTitle>
+                              <AlertDescription>The AI did not find any general fields that match.</AlertDescription>
+                            </Alert>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-xl flex items-center">
+                             <AlertCircle className="mr-2 h-6 w-6 text-destructive" /> General Discrepancies
+                          </CardTitle>
+                          <CardDescription>Fields that differed between the Sales Order and Purchase Order(s).</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {(comparisonResult.discrepancies && comparisonResult.discrepancies.length > 0) ? (
+                            <div className="border rounded-md overflow-hidden max-h-[300px] overflow-y-auto">
+                              <Table>
+                                <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                                  <TableRow>
+                                    <TableHead className="font-semibold w-[30%]">Field</TableHead>
+                                    <TableHead className="font-semibold w-[27%]">PO Value</TableHead>
+                                    <TableHead className="font-semibold w-[27%]">SO Value</TableHead>
+                                    <TableHead className="font-semibold w-[16%] text-center">Reason</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {comparisonResult.discrepancies.map((d, index) => (
+                                    <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
+                                      <TableCell className="font-medium py-2 px-3 text-sm">{d.field}</TableCell>
+                                      <TableCell className="py-2 px-3 text-sm">{d.purchaseOrderValue}</TableCell>
+                                      <TableCell className="py-2 px-3 text-sm">{d.salesOrderValue}</TableCell>
+                                      <TableCell className="text-center py-2 px-3 text-sm">
+                                        <Tooltip delayDuration={100}>
+                                          <TooltipTrigger asChild>
+                                            <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
+                                          </TooltipTrigger>
+                                          <TooltipContent className="bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg max-w-xs">
+                                            <p className="font-semibold">Discrepancy Reason:</p>
+                                            <p className="text-sm">{d.reason || 'No specific reason provided.'}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          ) : (
+                             <Alert variant="default" className="mt-2 text-sm">
+                              <Info className="h-4 w-4" />
+                              <AlertTitle className="text-base">No General Discrepancies Found.</AlertTitle>
+                              <AlertDescription>The AI did not find any general discrepancies.</AlertDescription>
+                            </Alert>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               )}
               {!isLoading && !error && !comparisonResult && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <Search className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Enter a Sales Order name to fetch and compare documents.</p>
-                  <p className="text-sm">The system will retrieve the SO PDF and its first linked PO PDF for comparison.</p>
+                  <p className="text-sm">The system will retrieve the SO PDF and its linked PO PDF(s) for comparison.</p>
                 </div>
               )}
             </CardContent>
