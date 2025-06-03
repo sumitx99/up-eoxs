@@ -110,7 +110,7 @@ function OrderComparatorClientContent() {
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
         return <XCircle className="h-4 w-4 text-destructive" />;
       case 'PO_ONLY':
-        return <MinusCircle className="h-4 w-4 text-orange-500" />; // Keeping orange for PO_ONLY for distinction
+        return <MinusCircle className="h-4 w-4 text-orange-500" />;
       case 'SO_ONLY':
         return <PackagePlus className="h-4 w-4 text-accent" />;
       default:
@@ -129,7 +129,8 @@ function OrderComparatorClientContent() {
             alt="EOXS Logo"
             width={128}
             height={50}
-            className="object-contain"
+            className="object-contain border border-red-500" // Added temporary border for debugging
+            priority={true} // Added priority
           />
         </div>
         <header className="mb-6 text-center">
