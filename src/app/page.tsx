@@ -127,11 +127,11 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <div className="w-full flex justify-end px-4 pt-4 mb-2">
           <Image
-            src="/eoxs_logo.svg" 
+            src="/eoxs-logo(1).svg" 
             alt="EOXS Logo"
             width={128} 
             height={62} 
-            className="object-contain border border-red-500" 
+            className="object-contain" 
             priority 
           />
         </div>
@@ -392,7 +392,7 @@ function OrderComparatorClientContent() {
           </Card>
         </div>
         <footer className="mt-12 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} AI comparator. Powered by AI.</p>
+          <p>&copy; {new Date().getFullYear()} EOXS AI comparator. Powered by AI.</p>
         </footer>
       </div>
     </TooltipProvider>
@@ -406,5 +406,7 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+
+    
 
     
