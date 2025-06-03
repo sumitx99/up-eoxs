@@ -142,20 +142,32 @@ export async function compareOrdersAction(
     salesOrderDetails = await fetchSalesOrderPdfFromOdoo(salesOrderUserInputName.trim(), odooUrl, odooDb, odooUsername, odooPassword);
     console.log(`SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.fileName}, Original SO Name: ${salesOrderDetails.originalName}, Size: ${salesOrderDetails.size} bytes`);
 
-    // Placeholder for Purchase Order
-    // const placeholderPoText = "Intentionally Blank Purchase Order"; // Removed as per request
-    // const placeholderPoBase64 = Buffer.from(placeholderPoText).toString('base64'); // Removed as per request
-    const placeholderPoDataUri = `data:text/plain;charset=utf-8;base64,${placeholderPoBase64}`; // This will cause a ReferenceError as placeholderPoBase64 is not defined
-    
-    console.log("SERVER_ACTION: Purchase Order fetching is disabled. Using placeholder for PO.");
+    // ────────────────────────────────────────────────────────────────
+    // 4b) FETCH ALL PURCHASE ORDER PDFs linked to this Sale Order
+    // ────────────────────────────────────────────────────────────────
+    const purchaseOrderDetails: FetchedPdfDetails[] = 
+      await fetchPurchaseOrderPdfsFromOdoo(
+        salesOrderUserInputName.trim(), // Note: Consider using salesOrderDetails.originalName for more accuracy
+        odooUrl,
+        odooDb,
+        odooUsername,
+        odooPassword
+      );
 
+    // Log each PO result
+    purchaseOrderDetails.forEach((po) => {
+      console.log(
+        `SERVER_ACTION: Successfully fetched PO PDF: ${po.originalName} (size: ${po.size} bytes)`
+      );
+    });
+    
     if (salesOrderDetails.size === 0) {
         let warningMessage = `Fetched Sales Order PDF for '${salesOrderDetails.fileName}' is empty (0 bytes). `;
         console.warn("SERVER_ACTION: " + warningMessage + "This will likely cause issues with AI comparison.");
     }
 
     const result = await compareOrderDetails({
-      purchaseOrder: placeholderPoDataUri, // Pass placeholder PO
+      purchaseOrder: placeholderPoDataUri, // This will cause a ReferenceError as placeholderPoDataUri is not defined
       salesOrder: salesOrderDetails.dataUri,
     });
 
@@ -173,6 +185,12 @@ export async function compareOrdersAction(
         if (e.name === 'ReferenceError' && e.message.includes('placeholderPoBase64')) {
             clientFacingMessage = `Developer Error: The variable 'placeholderPoBase64' was used without being defined. This likely means the placeholder PO logic is currently incomplete due to a recent change. Full error: ${e.message}`;
             logMessage = `SERVER_ACTION_ERROR (ReferenceError for placeholderPoBase64): ${e.message}`;
+        } else if (e.name === 'ReferenceError' && e.message.includes('fetchPurchaseOrderPdfsFromOdoo is not defined')) {
+            clientFacingMessage = `Developer Error: The function 'fetchPurchaseOrderPdfsFromOdoo' is called but not yet defined. This is expected if it's part of a multi-step implementation. Full error: ${e.message}`;
+            logMessage = `SERVER_ACTION_ERROR (ReferenceError for fetchPurchaseOrderPdfsFromOdoo): ${e.message}`;
+        } else if (e.name === 'ReferenceError' && e.message.includes('placeholderPoDataUri is not defined')) {
+            clientFacingMessage = `Developer Error: The variable 'placeholderPoDataUri' is used but no longer defined after removing placeholder logic. The call to 'compareOrderDetails' needs to be updated to use the fetched POs. Full error: ${e.message}`;
+            logMessage = `SERVER_ACTION_ERROR (ReferenceError for placeholderPoDataUri): ${e.message}`;
         } else if (lowerCaseMessage.includes("authentication failed") ||
             lowerCaseMessage.includes("login failed") ||
             lowerCaseMessage.includes("returned an invalid uid")) {
@@ -206,3 +224,9 @@ export async function compareOrdersAction(
     return { error: finalClientMessage };
   }
 }
+
+// Define initialState directly in the client component (src/app/page.tsx)
+// export const initialState: CompareActionState = { // This was moved to page.tsx
+//   error: null,
+//   data: null,
+// };
