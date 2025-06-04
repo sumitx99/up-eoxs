@@ -279,7 +279,23 @@ async function fetchPurchaseOrderPdfsFromOdoo(
     ["res_model", "=", "sale.order"],
     ["res_id", "=", saleOrderId],
     ["mimetype", "=", "application/pdf"],
-    ["name", "ilike", "Purchase%Order%"], // Filter by name to find POs
+    // OR conditions for various PO name patterns
+    ['|',
+      ['name', 'ilike', 'Purchase%Order%'],
+      ['|',
+        ['name', 'ilike', 'PO#%'],
+        ['|',
+          ['name', 'ilike', 'PO_%'],
+          ['|',
+            ['name', 'ilike', 'PO,%'], 
+            ['|',
+              ['name', 'ilike', 'PO No%'],
+              ['name', 'ilike', 'Request%for%Quotation%']
+            ]
+          ]
+        ]
+      ]
+    ]
   ];
 
   let attachments: Array<{ id: number; name: string; datas: string; file_size: number }>;
@@ -313,7 +329,7 @@ async function fetchPurchaseOrderPdfsFromOdoo(
 
   if (!attachments || attachments.length === 0) {
     console.warn(
-      `SERVER_ACTION: No PDF attachments matching 'Purchase%Order%' found directly on Sales Order ID '${saleOrderId}'.`
+      `SERVER_ACTION: No PDF attachments matching PO-related keywords found directly on Sales Order ID '${saleOrderId}'.`
     );
     return [];
   }
@@ -349,3 +365,4 @@ async function fetchPurchaseOrderPdfsFromOdoo(
   }
   return results;
 }
+
