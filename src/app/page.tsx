@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
-import { compareOrdersAction, type CompareActionState } from './actions';
+import { compareOrdersAction, type CompareActionState } from './actions'; 
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -117,7 +117,7 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <div className="w-full flex justify-end px-4 pt-4 mb-2">
           <img
-            src="/eoxs-logo(1).png" 
+            src="/logo.png" 
             alt="EOXS Logo"
             width={128} 
             height={62} 
@@ -399,6 +399,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
