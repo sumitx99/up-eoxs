@@ -3,7 +3,6 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-// Removed: import Image from 'next/image'; // No longer using next/image for the logo temporarily
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -117,14 +116,12 @@ function OrderComparatorClientContent() {
     <TooltipProvider>
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <div className="w-full flex justify-end px-4 pt-4 mb-2">
-          {/* Changed to standard img tag for diagnostics */}
           <img
-            src="/eoxs-logo(1).svg" 
+            src="/eoxs-logo(1).png" 
             alt="EOXS Logo"
             width={128} 
             height={62} 
             className="object-contain"
-            // priority attribute is not valid for standard img tag
           />
         </div>
         <header className="mb-8 text-center">
@@ -402,5 +399,6 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
