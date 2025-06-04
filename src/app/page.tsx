@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
-import { compareOrdersAction, type CompareActionState } from './actions'; 
+import { compareOrdersAction, type CompareActionState } from './actions';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -115,16 +115,7 @@ function OrderComparatorClientContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen p-4 md:p-8 bg-background">
-        <div className="w-full flex justify-end px-4 pt-4 mb-2">
-          <img
-            src="/eoxs-logo (1).png" 
-            alt="EOXS Logo"
-            width={128} 
-            height={62} 
-            className="object-contain"
-          />
-        </div>
-        <header className="mb-8 text-center">
+        <header className="my-8 text-center"> {/* Adjusted margin to my-8 to give space if logo was removed */}
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
             <h1 className="text-4xl font-bold text-foreground">EOXS AI comparator</h1>
@@ -399,6 +390,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
