@@ -50,7 +50,7 @@ async function getOdooClient(): Promise<{ client: AxiosInstance; uid: number }> 
   const client = axiosCookieJarSupport(axios.create({ jar }));
 
   const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
-  const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
+  // Removed: const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`); // This client is created locally in functions
 
   return new Promise((resolve, reject) => {
     commonClient.methodCall('authenticate', [odooDb, odooUsername, odooPassword, {}], async (error: any, userId: number | false) => {
@@ -64,19 +64,9 @@ async function getOdooClient(): Promise<{ client: AxiosInstance; uid: number }> 
       }
       
       uid = userId;
-      // Store the objectClient for further calls if needed, or adapt as necessary
-      // For simplicity, this example assumes direct use or re-creation for object calls.
-      // For now, we'll just use the clients directly in the functions.
-      // If you plan to reuse 'objectClient' extensively, you might want to manage its session/cookie handling with axios.
-      // However, node-xmlrpc handles its own http requests. If using axios for XMLRPC, it's more complex.
-      // Sticking to node-xmlrpc client for XMLRPC calls.
-
-      // This simple setup doesn't use the axios client for XMLRPC, so odooClient isn't strictly needed for XMLRPC.
-      // If you were to make REST calls to Odoo, then the axios client would be used.
-      // For this app, only XMLRPC is used.
       
       console.log('Successfully authenticated to Odoo. UID:', uid);
-      resolve({ client, uid }); // client is illustrative if REST API was used. uid is critical.
+      resolve({ client, uid }); 
     });
   });
 }
@@ -148,7 +138,6 @@ async function fetchSalesOrderFromOdoo(salesOrderName: string): Promise<SalesOrd
           }
         } else {
             console.warn(`No main attachment found for Sales Order '${salesOrderName}'. An SO PDF might need to be generated or explicitly attached if required by the AI.`);
-            // Fallback: Try to get the report PDF for the SO if no attachment
             try {
                 const reportBytes: string | false = await new Promise((resolveReport, rejectReport) => {
                     objectClient.methodCall(
@@ -158,21 +147,65 @@ async function fetchSalesOrderFromOdoo(salesOrderName: string): Promise<SalesOrd
                             uid,
                             odooPassword,
                             'ir.actions.report',
-                            '_render_qweb_pdf', // Odoo 15+
-                            ['sale.report_saleorder', [so.id]], // report_name, docids
+                            'report_action', // Odoo 13 style, then _render_qweb_pdf
+                            [so.id, 'sale.report_saleorder'], // docids, report_name
                             {},
                         ],
-                        (reportErr: any, reportRes: [string | false, string] | string | false ) => { // Response can vary
-                            if (reportErr) return rejectReport(reportErr);
-                            // Odoo 13 might return [data, 'pdf']. Odoo 15+ just data.
-                            if (Array.isArray(reportRes) && reportRes.length > 0 && typeof reportRes[0] === 'string') {
-                                resolveReport(reportRes[0]);
-                            } else if (typeof reportRes === 'string') {
-                                resolveReport(reportRes);
+                         (reportActionErr: any, reportActionRes: any) => {
+                            if (reportActionErr) return rejectReport(reportActionErr);
+                            if (!reportActionRes || !reportActionRes.id) {
+                                // Fallback for Odoo 15+ style if 'report_action' doesn't directly give PDF or if it's simpler to call _render_qweb_pdf
+                                 objectClient.methodCall(
+                                    'execute_kw',
+                                    [
+                                        odooDb,
+                                        uid,
+                                        odooPassword,
+                                        'ir.actions.report',
+                                        '_render_qweb_pdf', 
+                                        ['sale.report_saleorder', [so.id]], 
+                                        {},
+                                    ],
+                                    (renderErr: any, renderRes: [string | false, string] | string | false ) => {
+                                        if (renderErr) return rejectReport(renderErr);
+                                        if (Array.isArray(renderRes) && renderRes.length > 0 && typeof renderRes[0] === 'string') {
+                                            resolveReport(renderRes[0]);
+                                        } else if (typeof renderRes === 'string') {
+                                            resolveReport(renderRes);
+                                        } else {
+                                            resolveReport(false);
+                                        }
+                                    }
+                                );
+                                return;
                             }
-                            else {
-                                resolveReport(false);
-                            }
+                            // If report_action returned something, assume it might be a direct way or older Odoo.
+                            // This path might need more Odoo version-specific handling if 'report_action' is used.
+                            // For simplicity and broader compatibility, direct call to _render_qweb_pdf is often preferred.
+                            // Let's proceed with the direct _render_qweb_pdf call as the primary method.
+                            // This part is a bit complex as Odoo API for reports can vary.
+                             objectClient.methodCall(
+                                'execute_kw',
+                                [
+                                    odooDb,
+                                    uid,
+                                    odooPassword,
+                                    'ir.actions.report',
+                                    '_render_qweb_pdf', 
+                                    ['sale.report_saleorder', [so.id]], 
+                                    {},
+                                ],
+                                (renderErr: any, renderRes: [string | false, string] | string | false ) => {
+                                    if (renderErr) return rejectReport(renderErr);
+                                    if (Array.isArray(renderRes) && renderRes.length > 0 && typeof renderRes[0] === 'string') {
+                                        resolveReport(renderRes[0]);
+                                    } else if (typeof renderRes === 'string') {
+                                        resolveReport(renderRes);
+                                    } else {
+                                        resolveReport(false);
+                                    }
+                                }
+                            );
                         }
                     );
                 });
@@ -202,38 +235,13 @@ async function fetchPurchaseOrderPdfsFromOdoo(salesOrderId: number, salesOrderNa
 
   const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
   
-  const poNamePatterns = [
-    "Purchase%Order%", // Original
-    "PO#%", 
-    "PO_%",
-    "PO,%", // PO, (comma)
-    "PO No%",
-    "Request for Quotation%"
-  ];
-
-  const orConditions = poNamePatterns.map(pattern => ['name', 'ilike', pattern]);
-  
-  // Odoo's 'OR' logic: for 'n' conditions, you need 'n-1' '|' operators.
-  // e.g., ['|', cond1, '|', cond2, cond3] for (cond1 OR cond2 OR cond3)
-  let attSearchDomain: (string | string[])[] = [
+  // Reverted search domain to only look for "Purchase%Order%"
+  const attSearchDomain: (string | string[])[] = [
     ["res_model", "=", "sale.order"],
     ["res_id", "=", salesOrderId],
     ["mimetype", "=", "application/pdf"],
+    ["name", "ilike", "Purchase%Order%"], 
   ];
-
-  if (orConditions.length > 0) {
-      let currentDomain = orConditions[0];
-      for (let i = 1; i < orConditions.length; i++) {
-          currentDomain = ['|', currentDomain, orConditions[i]];
-      }
-      attSearchDomain = attSearchDomain.concat(currentDomain as any); // Add the OR'd name conditions
-  } else {
-      // If no patterns, this would fetch all PDFs for the SO, which might be too broad.
-      // For now, assume patterns are always provided. Or add a default restrictive pattern.
-      console.warn("No PO name patterns provided for filtering attachments.");
-      return [];
-  }
-
 
   return new Promise((resolve, reject) => {
     objectClient.methodCall(
@@ -245,7 +253,7 @@ async function fetchPurchaseOrderPdfsFromOdoo(salesOrderId: number, salesOrderNa
         'ir.attachment',
         'search_read',
         [attSearchDomain],
-        { fields: ['id', 'name', 'datas', 'file_size'], limit: 10 }, // Limit to 10 POs for sanity
+        { fields: ['id', 'name', 'datas', 'mimetype', 'file_size'], limit: 10 }, // Limit to 10 POs for sanity
       ],
       (err: any, attachments: OdooAttachment[]) => {
         if (err) {
@@ -254,18 +262,18 @@ async function fetchPurchaseOrderPdfsFromOdoo(salesOrderId: number, salesOrderNa
         }
 
         if (!attachments || attachments.length === 0) {
-          console.log(`No attachments matching PO criteria found for Sales Order '${salesOrderName}'.`);
+          console.log(`No attachments matching "Purchase%Order%" found for Sales Order '${salesOrderName}'.`);
           return resolve([]);
         }
         
         const poPdfDataUris = attachments
-          .filter(att => att.datas) // Ensure 'datas' field is not false or empty
+          .filter(att => att.datas && att.mimetype === 'application/pdf') // Ensure 'datas' field is not false or empty and mimetype is PDF
           .map(att => {
             console.log(`Found PO attachment: ${att.name} (Size: ${att.file_size}) for SO ${salesOrderName}`);
             return `data:${att.mimetype};base64,${att.datas}`;
           });
         
-        console.log(`Found ${poPdfDataUris.length} PO PDF(s) for Sales Order '${salesOrderName}'.`);
+        console.log(`Found ${poPdfDataUris.length} PO PDF(s) matching "Purchase%Order%" for Sales Order '${salesOrderName}'.`);
         resolve(poPdfDataUris);
       }
     );
@@ -274,7 +282,7 @@ async function fetchPurchaseOrderPdfsFromOdoo(salesOrderId: number, salesOrderNa
 
 
 export async function compareOrdersAction(
-  prevState: CompareActionState, // Not deeply used if form is removed, but kept for potential future use
+  prevState: CompareActionState, 
   formData: FormData
 ): Promise<CompareActionState> {
   const salesOrderName = formData.get('salesOrderName') as string;
@@ -286,7 +294,6 @@ export async function compareOrdersAction(
   console.log(`Starting comparison for Sales Order: ${salesOrderName}`);
 
   try {
-    // Step 1: Ensure Odoo login and get UID
     if (!uid) {
       await getOdooClient();
     }
@@ -294,31 +301,22 @@ export async function compareOrdersAction(
       return { error: 'Failed to authenticate with Odoo. Cannot proceed.', data: null };
     }
     
-    // Step 2: Fetch Sales Order details from Odoo (including its PDF)
     const salesOrderData = await fetchSalesOrderFromOdoo(salesOrderName);
     if (!salesOrderData.pdfDataUri) {
-      // Log warning but proceed, AI flow might handle SOs without explicit PDFs based on other extracted data if designed to.
-      // Or, decide to return an error if SO PDF is critical.
-      // For now, let's assume the AI flow can handle cases where SO PDF might be missing, but it's highly recommended.
       console.warn(`Sales Order '${salesOrderName}' PDF data URI is missing. Comparison quality may be affected if the AI relies heavily on it.`);
-      // If SO PDF is mandatory for the AI:
-      // return { error: `Could not retrieve PDF for Sales Order '${salesOrderName}'. Comparison cannot proceed without it.`, data: null };
     }
 
-    // Step 3: Fetch linked Purchase Order PDFs from Odoo
     const purchaseOrderPdfDataUris = await fetchPurchaseOrderPdfsFromOdoo(salesOrderData.id, salesOrderData.name);
     
     if (purchaseOrderPdfDataUris.length === 0) {
-      console.log(`No Purchase Order PDFs found attached to Sales Order '${salesOrderName}'. Proceeding with comparison against SO only (if possible).`);
+      console.log(`No Purchase Order PDFs found attached to Sales Order '${salesOrderName}' matching "Purchase%Order%". Proceeding with comparison (AI will note lack of POs).`);
     }
 
-    // Step 4: Prepare input for the AI comparison flow
     const comparisonInput: CompareOrderDetailsInput = {
-      salesOrderPdfDataUri: salesOrderData.pdfDataUri || '', // Pass empty string if null, flow needs to handle this.
+      salesOrderPdfDataUri: salesOrderData.pdfDataUri || '', 
       purchaseOrderPdfDataUris: purchaseOrderPdfDataUris,
     };
 
-    // Step 5: Call the AI flow
     console.log('Calling compareOrderDetails AI flow...');
     const comparisonOutput = await compareOrderDetails(comparisonInput);
     console.log('AI flow completed.');
@@ -327,12 +325,9 @@ export async function compareOrdersAction(
 
   } catch (e: any) {
     console.error('Error in compareOrdersAction:', e);
-    // Check for specific Odoo connection errors vs. other errors
     if (e.message && (e.message.includes('Odoo authentication failed') || e.message.includes('Error fetching') || e.message.includes('ECONNREFUSED'))) {
         return { error: `Odoo Connection/Data Error: ${e.message}. Please check Odoo connectivity and data for '${salesOrderName}'.`, data: null };
     }
     return { error: e.message || 'An unexpected error occurred during order comparison.', data: null };
   }
 }
-
-    
