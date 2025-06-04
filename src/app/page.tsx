@@ -3,14 +3,15 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import Image from 'next/image'; // Import the Next.js Image component
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+// Input component is no longer directly used for SO name, but might be used elsewhere or by other components.
+// import { Input } from '@/components/ui/input'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -127,11 +128,11 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <div className="w-full flex justify-end px-4 pt-4 mb-2">
           <Image
-            src="https://i.imgur.com/p4fQCAo.png" 
+            src="/eoxs-logo(1).svg" 
             alt="EOXS Logo"
             width={128} 
             height={62} 
-            className="object-contain" 
+            className="object-contain"
             priority 
           />
         </div>
@@ -152,10 +153,10 @@ function OrderComparatorClientContent() {
                 <div>
                   <h2 className="text-2xl font-semibold flex items-center">
                     <Search className="mr-3 h-7 w-7 text-primary" />
-                    Input Sales Order Identifier
+                    Sales Order for Comparison
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    Provide Sales Order name/sequence to fetch both SO and linked PO for comparison.
+                    The system will fetch the SO and linked PO based on the identifier from the URL.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -164,18 +165,17 @@ function OrderComparatorClientContent() {
                   <form action={formAction} onSubmit={handleFormSubmit}>
                     <CardContent className="space-y-6 pt-6">
                        <div className="space-y-2">
-                        <Label htmlFor="salesOrderName" className="text-lg font-medium">Sales Order Name/Sequence</Label>
-                        <Input
-                          id="salesOrderName"
-                          name="salesOrderName" 
-                          type="text"
-                          placeholder="e.g., SO - 10372"
-                          value={salesOrderName}
-                          onChange={(e) => setSalesOrderName(e.target.value)}
-                          className="w-full focus:ring-primary focus:border-primary"
-                          required
-                        />
-                         <p className="text-xs text-muted-foreground">Enter the Sales Order name. The system will attempt to fetch this SO's PDF and the PDF of the first Purchase Order linked to it.</p>
+                        <Label htmlFor="salesOrderNameDisplay" className="text-lg font-medium">Comparing Sales Order:</Label>
+                        {salesOrderName ? (
+                           <p id="salesOrderNameDisplay" className="text-lg font-semibold text-primary py-2 px-3 border rounded-md bg-secondary/30">
+                            {salesOrderName}
+                          </p>
+                        ) : (
+                          <p id="salesOrderNameDisplay" className="text-lg text-muted-foreground py-2 px-3 border rounded-md">
+                            No Sales Order specified in URL.
+                          </p>
+                        )}
+                        <input type="hidden" name="salesOrderName" value={salesOrderName} />
                       </div>
                     </CardContent>
                     <CardFooter>
@@ -220,7 +220,7 @@ function OrderComparatorClientContent() {
                     </p>
                   </div>
 
-                  <Accordion type="multiple" className="w-full" defaultValue={["matched-items", "discrepancies", "product-line-items"]}>
+                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "product-line-items"]}>
                     <AccordionItem value="matched-items">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
@@ -256,7 +256,7 @@ function OrderComparatorClientContent() {
                           <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
                             <AlertTitle className="text-base">No General Matched Fields Identified.</AlertTitle>
-                            <AlertDescription>The AI did not find any general fields that match between the two documents.</AlertDescription>
+                            <AlertDescription>The AI did not find any general fields that match between the Sales Order and Purchase Order(s).</AlertDescription>
                           </Alert>
                         )}
                       </AccordionContent>
@@ -307,7 +307,7 @@ function OrderComparatorClientContent() {
                            <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
                             <AlertTitle className="text-base">No General Discrepancies Found.</AlertTitle>
-                            <AlertDescription>The AI did not find any general discrepancies between the two documents.</AlertDescription>
+                            <AlertDescription>The AI did not find any general discrepancies between the Sales Order and Purchase Order(s).</AlertDescription>
                           </Alert>
                         )}
                       </AccordionContent>
@@ -406,7 +406,3 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
-
-    
-
-    
