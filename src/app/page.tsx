@@ -128,12 +128,13 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <div className="w-full flex justify-end px-4 pt-4 mb-2">
           <Image
-            src="/eoxs-logo(1).svg" 
-            alt="EOXS Logo"
+            src="https://placehold.co/128x62.png" 
+            alt="EOXS Logo Placeholder"
             width={128} 
             height={62} 
             className="object-contain"
-            priority 
+            priority
+            data-ai-hint="logo placeholder"
           />
         </div>
         <header className="mb-8 text-center">
