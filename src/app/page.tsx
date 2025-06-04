@@ -5,13 +5,12 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import { useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
-import { Button } from '@/components/ui/button';
+// Removed: import { useActionState } from 'react';
+// Removed: import { useFormStatus } from 'react-dom';
+// Removed: import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-// Input component is no longer directly used for SO name, but might be used elsewhere or by other components.
-// import { Input } from '@/components/ui/input'; 
+// Removed: import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -22,86 +21,89 @@ import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-interface SubmitButtonProps {
-  isSalesOrderNameEmpty: boolean;
-}
+// Removed SubmitButton component
 
-function SubmitButton({ isSalesOrderNameEmpty }: SubmitButtonProps) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full text-lg py-3" disabled={pending || isSalesOrderNameEmpty}>
-      {pending ? (
-        <>
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Comparing Documents...
-        </>
-      ) : (
-        <>
-          <Workflow className="mr-2 h-5 w-5" />
-          Compare Order Documents
-        </>
-      )}
-    </Button>
-  );
-}
-
-// Define initialState directly in the client component
-const initialState: CompareActionState = {
+// Define initialState for direct action call, though prevState might not be deeply used by the action in this scenario
+const initialActionState: CompareActionState = {
   error: null,
   data: null,
 };
 
 function OrderComparatorClientContent() {
   const [salesOrderName, setSalesOrderName] = useState<string>('');
-  const [formState, formAction] = useActionState<CompareActionState, FormData>(compareOrdersAction, initialState);
-  
   const [error, setError] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [currentProcessedSOName, setCurrentProcessedSOName] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
   useEffect(() => {
     const raw = searchParams.get('so_name');
-    if (raw) {
-      setSalesOrderName(decodeURIComponent(raw));
+    const decodedSOName = raw ? decodeURIComponent(raw) : '';
+
+    if (decodedSOName !== salesOrderName) {
+      setSalesOrderName(decodedSOName);
+      // Reset states when SO name changes to allow new auto-comparison
+      setComparisonResult(null);
+      setError(null);
+      setCurrentProcessedSOName(null); 
+      setIsLoading(false); // Ensure loading is reset
     }
-  }, [searchParams, setSalesOrderName]);
+  }, [searchParams, salesOrderName]);
+
 
   useEffect(() => {
-    // This effect handles the outcome of the server action
-    if (formState.error || formState.data) {
-      setIsLoading(false); // Stop loading when we have a result or an error
-    }
+    // Automatically trigger comparison when salesOrderName is set from URL and not yet processed
+    if (salesOrderName && salesOrderName.trim() !== '' && salesOrderName !== currentProcessedSOName && !isLoading) {
+      const triggerComparison = async () => {
+        setIsLoading(true);
+        setError(null);
+        setComparisonResult(null); // Clear previous results
 
-    if (formState.error) {
-      setError(formState.error);
-      setComparisonResult(null);
-      toast({
-          variant: "destructive",
-          title: "Comparison Failed",
-          description: formState.error,
-          duration: 9000,
-      });
-    }
-    if (formState.data) {
-      setComparisonResult(formState.data);
-      setError(null);
-      toast({
-          title: "Comparison Complete",
-          description: "The order documents have been compared successfully.",
-      });
-    }
-  }, [formState, toast]);
+        const formData = new FormData();
+        formData.append('salesOrderName', salesOrderName);
 
-  const handleFormSubmit = () => {
-    // Trigger loading state when form is about to be submitted
-    setIsLoading(true);
-    setError(null);
-    setComparisonResult(null);
-  };
-  
+        try {
+          // Directly call the server action
+          const resultState = await compareOrdersAction(initialActionState, formData);
+          
+          if (resultState.error) {
+            setError(resultState.error);
+            toast({
+              variant: "destructive",
+              title: "Comparison Failed",
+              description: resultState.error,
+              duration: 9000,
+            });
+          }
+          if (resultState.data) {
+            setComparisonResult(resultState.data);
+            toast({
+              title: "Comparison Complete",
+              description: "The order documents have been compared successfully.",
+            });
+          }
+          setCurrentProcessedSOName(salesOrderName); // Mark this SO name as processed
+        } catch (e: any) {
+          const errorMessage = e.message || "An unexpected error occurred during comparison.";
+          setError(errorMessage);
+          toast({
+              variant: "destructive",
+              title: "Comparison Failed",
+              description: errorMessage,
+              duration: 9000,
+          });
+          setCurrentProcessedSOName(salesOrderName); // Mark as processed even on error to prevent loops
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      triggerComparison();
+    }
+  }, [salesOrderName, currentProcessedSOName, isLoading, toast]);
+
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
@@ -120,8 +122,6 @@ function OrderComparatorClientContent() {
         return <HelpCircle className="h-5 w-5 text-muted-foreground" />;
     }
   };
-
-  const isSalesOrderNameEmpty = salesOrderName.trim() === '';
 
   return (
     <TooltipProvider>
@@ -156,13 +156,12 @@ function OrderComparatorClientContent() {
                     Sales Order for Comparison
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    The system will fetch the SO and linked PO based on the identifier from the URL.
+                    The system automatically fetches and compares the SO (and linked PO) based on the identifier from the URL.
                   </p>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-0">
                 <Card className="shadow-none border-0 rounded-t-none">
-                  <form action={formAction} onSubmit={handleFormSubmit}>
                     <CardContent className="space-y-6 pt-6">
                        <div className="space-y-2">
                         <Label htmlFor="salesOrderNameDisplay" className="text-lg font-medium">Comparing Sales Order:</Label>
@@ -172,16 +171,12 @@ function OrderComparatorClientContent() {
                           </p>
                         ) : (
                           <p id="salesOrderNameDisplay" className="text-lg text-muted-foreground py-2 px-3 border rounded-md">
-                            No Sales Order specified in URL.
+                            No Sales Order specified in URL. Waiting for SO name...
                           </p>
                         )}
-                        <input type="hidden" name="salesOrderName" value={salesOrderName} />
                       </div>
                     </CardContent>
-                    <CardFooter>
-                       <SubmitButton isSalesOrderNameEmpty={isSalesOrderNameEmpty} />
-                    </CardFooter>
-                  </form>
+                    {/* Removed CardFooter with submit button */}
                 </Card>
               </AccordionContent>
             </AccordionItem>
@@ -208,6 +203,12 @@ function OrderComparatorClientContent() {
                   <AlertTitle>Error</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
+              )}
+              {!isLoading && !error && !comparisonResult && salesOrderName && !currentProcessedSOName && (
+                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
+                  <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+                  <p className="text-lg">Preparing to compare Sales Order: {salesOrderName}...</p>
+                </div>
               )}
               {!isLoading && !error && comparisonResult && (
                 <>
@@ -376,11 +377,11 @@ function OrderComparatorClientContent() {
                   </Accordion>
                 </>
               )}
-              {!isLoading && !error && !comparisonResult && (
+              {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <Search className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Enter a Sales Order name to fetch and compare documents.</p>
-                  <p className="text-sm">The system will retrieve the SO PDF and its first linked PO PDF for comparison.</p>
+                  <p className="text-lg">Waiting for Sales Order name from URL to begin comparison.</p>
+                  <p className="text-sm">Please ensure 'so_name' parameter is in the URL.</p>
                 </div>
               )}
             </CardContent>
@@ -406,5 +407,6 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+    
 
     
