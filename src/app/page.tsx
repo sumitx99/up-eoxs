@@ -3,27 +3,20 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import Image from 'next/image';
+// Removed: import Image from 'next/image'; // No longer using next/image for the logo temporarily
 import { useSearchParams } from 'next/navigation';
-// Removed: import { useActionState } from 'react';
-// Removed: import { useFormStatus } from 'react-dom';
-// Removed: import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-// Removed: import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
-import { compareOrdersAction, type CompareActionState } from './actions'; // Changed to relative import
+import { compareOrdersAction, type CompareActionState } from './actions';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-// Removed SubmitButton component
-
-// Define initialState for direct action call, though prevState might not be deeply used by the action in this scenario
 const initialActionState: CompareActionState = {
   error: null,
   data: null,
@@ -45,28 +38,25 @@ function OrderComparatorClientContent() {
 
     if (decodedSOName !== salesOrderName) {
       setSalesOrderName(decodedSOName);
-      // Reset states when SO name changes to allow new auto-comparison
       setComparisonResult(null);
       setError(null);
       setCurrentProcessedSOName(null); 
-      setIsLoading(false); // Ensure loading is reset
+      setIsLoading(false);
     }
   }, [searchParams, salesOrderName]);
 
 
   useEffect(() => {
-    // Automatically trigger comparison when salesOrderName is set from URL and not yet processed
     if (salesOrderName && salesOrderName.trim() !== '' && salesOrderName !== currentProcessedSOName && !isLoading) {
       const triggerComparison = async () => {
         setIsLoading(true);
         setError(null);
-        setComparisonResult(null); // Clear previous results
+        setComparisonResult(null);
 
         const formData = new FormData();
         formData.append('salesOrderName', salesOrderName);
 
         try {
-          // Directly call the server action
           const resultState = await compareOrdersAction(initialActionState, formData);
           
           if (resultState.error) {
@@ -85,7 +75,7 @@ function OrderComparatorClientContent() {
               description: "The order documents have been compared successfully.",
             });
           }
-          setCurrentProcessedSOName(salesOrderName); // Mark this SO name as processed
+          setCurrentProcessedSOName(salesOrderName);
         } catch (e: any) {
           const errorMessage = e.message || "An unexpected error occurred during comparison.";
           setError(errorMessage);
@@ -95,7 +85,7 @@ function OrderComparatorClientContent() {
               description: errorMessage,
               duration: 9000,
           });
-          setCurrentProcessedSOName(salesOrderName); // Mark as processed even on error to prevent loops
+          setCurrentProcessedSOName(salesOrderName);
         } finally {
           setIsLoading(false);
         }
@@ -127,13 +117,14 @@ function OrderComparatorClientContent() {
     <TooltipProvider>
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <div className="w-full flex justify-end px-4 pt-4 mb-2">
-          <Image
+          {/* Changed to standard img tag for diagnostics */}
+          <img
             src="/eoxs-logo(1).svg" 
             alt="EOXS Logo"
             width={128} 
             height={62} 
             className="object-contain"
-            priority
+            // priority attribute is not valid for standard img tag
           />
         </div>
         <header className="mb-8 text-center">
@@ -176,7 +167,6 @@ function OrderComparatorClientContent() {
                         )}
                       </div>
                     </CardContent>
-                    {/* Removed CardFooter with submit button */}
                 </Card>
               </AccordionContent>
             </AccordionItem>
@@ -412,4 +402,5 @@ export default function OrderComparatorPage() {
     
 
     
+
 
