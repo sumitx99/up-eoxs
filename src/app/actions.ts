@@ -279,23 +279,7 @@ async function fetchPurchaseOrderPdfsFromOdoo(
     ["res_model", "=", "sale.order"],
     ["res_id", "=", saleOrderId],
     ["mimetype", "=", "application/pdf"],
-    // OR conditions for various PO name patterns
-    ['|',
-      ['name', 'ilike', 'Purchase%Order%'],
-      ['|',
-        ['name', 'ilike', 'PO#%'],
-        ['|',
-          ['name', 'ilike', 'PO_%'],
-          ['|',
-            ['name', 'ilike', 'PO,%'], 
-            ['|',
-              ['name', 'ilike', 'PO No%'],
-              ['name', 'ilike', 'Request%for%Quotation%']
-            ]
-          ]
-        ]
-      ]
-    ]
+    ["name", "ilike", "Purchase%Order%"]
   ];
 
   let attachments: Array<{ id: number; name: string; datas: string; file_size: number }>;
