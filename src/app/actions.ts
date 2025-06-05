@@ -43,14 +43,14 @@ async function getOdooClient(): Promise<{ client: AxiosInstance; uid: number }> 
   }
 
   if (!odooUrl || !odooDb || !odooUsername || !odooPassword) {
-    throw new Error('Odoo environment variables (ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD) are not properly configured.');
+    console.error('Odoo environment variables (ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD) are not properly configured.');
+    throw new Error('Odoo environment variables are not properly configured.');
   }
 
   const jar = new CookieJar();
   const client = axiosCookieJarSupport(axios.create({ jar }));
 
   const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
-  // Removed: const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`); // This client is created locally in functions
 
   return new Promise((resolve, reject) => {
     commonClient.methodCall('authenticate', [odooDb, odooUsername, odooPassword, {}], async (error: any, userId: number | false) => {
@@ -74,9 +74,11 @@ async function getOdooClient(): Promise<{ client: AxiosInstance; uid: number }> 
 
 async function fetchSalesOrderFromOdoo(salesOrderName: string): Promise<SalesOrderOdooData> {
   if (!uid) {
-    await getOdooClient(); // Ensure login
+    await getOdooClient(); 
   }
   if (!uid) throw new Error("Odoo login failed, UID not available.");
+  if (!odooUrl || !odooDb || !odooPassword) throw new Error("Odoo configuration is incomplete for fetching sales order.");
+
 
   const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
 
@@ -137,7 +139,7 @@ async function fetchSalesOrderFromOdoo(salesOrderName: string): Promise<SalesOrd
             console.error(`Error fetching attachment (ID: ${attachmentId}) for SO '${salesOrderName}':`, attError);
           }
         } else {
-            console.warn(`No main attachment found for Sales Order '${salesOrderName}'. An SO PDF might need to be generated or explicitly attached if required by the AI.`);
+            console.warn(`No main attachment found for Sales Order '${salesOrderName}'. Attempting to generate report PDF.`);
             try {
                 const reportBytes: string | false = await new Promise((resolveReport, rejectReport) => {
                     objectClient.methodCall(
@@ -147,65 +149,19 @@ async function fetchSalesOrderFromOdoo(salesOrderName: string): Promise<SalesOrd
                             uid,
                             odooPassword,
                             'ir.actions.report',
-                            'report_action', // Odoo 13 style, then _render_qweb_pdf
-                            [so.id, 'sale.report_saleorder'], // docids, report_name
+                            '_render_qweb_pdf', 
+                            ['sale.report_saleorder', [so.id]], 
                             {},
                         ],
-                         (reportActionErr: any, reportActionRes: any) => {
-                            if (reportActionErr) return rejectReport(reportActionErr);
-                            if (!reportActionRes || !reportActionRes.id) {
-                                // Fallback for Odoo 15+ style if 'report_action' doesn't directly give PDF or if it's simpler to call _render_qweb_pdf
-                                 objectClient.methodCall(
-                                    'execute_kw',
-                                    [
-                                        odooDb,
-                                        uid,
-                                        odooPassword,
-                                        'ir.actions.report',
-                                        '_render_qweb_pdf', 
-                                        ['sale.report_saleorder', [so.id]], 
-                                        {},
-                                    ],
-                                    (renderErr: any, renderRes: [string | false, string] | string | false ) => {
-                                        if (renderErr) return rejectReport(renderErr);
-                                        if (Array.isArray(renderRes) && renderRes.length > 0 && typeof renderRes[0] === 'string') {
-                                            resolveReport(renderRes[0]);
-                                        } else if (typeof renderRes === 'string') {
-                                            resolveReport(renderRes);
-                                        } else {
-                                            resolveReport(false);
-                                        }
-                                    }
-                                );
-                                return;
+                        (renderErr: any, renderRes: [string | false, string] | string | false ) => {
+                            if (renderErr) return rejectReport(renderErr);
+                            if (Array.isArray(renderRes) && renderRes.length > 0 && typeof renderRes[0] === 'string') {
+                                resolveReport(renderRes[0]);
+                            } else if (typeof renderRes === 'string') {
+                                resolveReport(renderRes);
+                            } else {
+                                resolveReport(false);
                             }
-                            // If report_action returned something, assume it might be a direct way or older Odoo.
-                            // This path might need more Odoo version-specific handling if 'report_action' is used.
-                            // For simplicity and broader compatibility, direct call to _render_qweb_pdf is often preferred.
-                            // Let's proceed with the direct _render_qweb_pdf call as the primary method.
-                            // This part is a bit complex as Odoo API for reports can vary.
-                             objectClient.methodCall(
-                                'execute_kw',
-                                [
-                                    odooDb,
-                                    uid,
-                                    odooPassword,
-                                    'ir.actions.report',
-                                    '_render_qweb_pdf', 
-                                    ['sale.report_saleorder', [so.id]], 
-                                    {},
-                                ],
-                                (renderErr: any, renderRes: [string | false, string] | string | false ) => {
-                                    if (renderErr) return rejectReport(renderErr);
-                                    if (Array.isArray(renderRes) && renderRes.length > 0 && typeof renderRes[0] === 'string') {
-                                        resolveReport(renderRes[0]);
-                                    } else if (typeof renderRes === 'string') {
-                                        resolveReport(renderRes);
-                                    } else {
-                                        resolveReport(false);
-                                    }
-                                }
-                            );
                         }
                     );
                 });
@@ -214,7 +170,7 @@ async function fetchSalesOrderFromOdoo(salesOrderName: string): Promise<SalesOrd
                     pdfDataUri = `data:application/pdf;base64,${reportBytes}`;
                     console.log(`Successfully generated and fetched report PDF for SO '${salesOrderName}'.`);
                 } else {
-                    console.warn(`Could not generate report PDF for SO '${salesOrderName}'. The AI comparison will proceed without an SO PDF if no attachment was found either.`);
+                    console.warn(`Could not generate report PDF for SO '${salesOrderName}'. Comparison will proceed without an SO PDF if no attachment was found either.`);
                 }
             } catch (reportError: any) {
                 console.error(`Error generating report PDF for SO '${salesOrderName}':`, reportError);
@@ -229,13 +185,13 @@ async function fetchSalesOrderFromOdoo(salesOrderName: string): Promise<SalesOrd
 
 async function fetchPurchaseOrderPdfsFromOdoo(salesOrderId: number, salesOrderName: string): Promise<string[]> {
   if (!uid) {
-    await getOdooClient(); // Ensure login
+    await getOdooClient(); 
   }
   if (!uid) throw new Error("Odoo login failed, UID not available.");
+  if (!odooUrl || !odooDb || !odooPassword) throw new Error("Odoo configuration is incomplete for fetching purchase orders.");
 
   const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
   
-  // Reverted search domain to only look for "Purchase%Order%"
   const attSearchDomain: (string | string[])[] = [
     ["res_model", "=", "sale.order"],
     ["res_id", "=", salesOrderId],
@@ -253,7 +209,7 @@ async function fetchPurchaseOrderPdfsFromOdoo(salesOrderId: number, salesOrderNa
         'ir.attachment',
         'search_read',
         [attSearchDomain],
-        { fields: ['id', 'name', 'datas', 'mimetype', 'file_size'], limit: 10 }, // Limit to 10 POs for sanity
+        { fields: ['id', 'name', 'datas', 'mimetype', 'file_size'], limit: 10 }, 
       ],
       (err: any, attachments: OdooAttachment[]) => {
         if (err) {
@@ -267,7 +223,7 @@ async function fetchPurchaseOrderPdfsFromOdoo(salesOrderId: number, salesOrderNa
         }
         
         const poPdfDataUris = attachments
-          .filter(att => att.datas && att.mimetype === 'application/pdf') // Ensure 'datas' field is not false or empty and mimetype is PDF
+          .filter(att => att.datas && att.mimetype === 'application/pdf') 
           .map(att => {
             console.log(`Found PO attachment: ${att.name} (Size: ${att.file_size}) for SO ${salesOrderName}`);
             return `data:${att.mimetype};base64,${att.datas}`;
@@ -288,23 +244,31 @@ export async function compareOrdersAction(
   const salesOrderName = formData.get('salesOrderName') as string;
 
   if (!salesOrderName || salesOrderName.trim() === '') {
-    return { error: 'Sales Order Name is required.', data: null };
+    return { error: 'Please provide a Sales Order Name to start the comparison.', data: null };
   }
 
   console.log(`Starting comparison for Sales Order: ${salesOrderName}`);
 
   try {
-    if (!uid) {
-      await getOdooClient();
+    // Ensure Odoo environment variables are checked by getOdooClient or throw early
+    if (!odooUrl || !odooDb || !odooUsername || !odooPassword) {
+        console.error('Odoo environment variables are not configured.');
+        // This specific error is for server-side, user gets a generic one below.
+        throw new Error('Odoo configuration error.'); 
     }
+
     if (!uid) {
-      return { error: 'Failed to authenticate with Odoo. Cannot proceed.', data: null };
+      await getOdooClient(); // This can throw if ODOO_ env vars are missing or auth fails
+    }
+    // Double check uid after attempt, as getOdooClient might not throw if client setup fails before auth
+    if (!uid) {
+      // This state should ideally be caught by getOdooClient's throw, but as a safeguard:
+      console.error('Odoo authentication failed or UID not set after getOdooClient call.');
+      return { error: 'Could not connect to the order system due to an authentication issue. Please contact support.', data: null };
     }
     
     const salesOrderData = await fetchSalesOrderFromOdoo(salesOrderName);
-    if (!salesOrderData.pdfDataUri) {
-      console.warn(`Sales Order '${salesOrderName}' PDF data URI is missing. Comparison quality may be affected if the AI relies heavily on it.`);
-    }
+    // fetchSalesOrderFromOdoo can throw errors like "Sales Order ... not found" or "Error fetching Sales Order..."
 
     const purchaseOrderPdfDataUris = await fetchPurchaseOrderPdfsFromOdoo(salesOrderData.id, salesOrderData.name);
     
@@ -324,10 +288,26 @@ export async function compareOrdersAction(
     return { error: null, data: comparisonOutput };
 
   } catch (e: any) {
-    console.error('Error in compareOrdersAction:', e);
-    if (e.message && (e.message.includes('Odoo authentication failed') || e.message.includes('Error fetching') || e.message.includes('ECONNREFUSED'))) {
-        return { error: `Odoo Connection/Data Error: ${e.message}. Please check Odoo connectivity and data for '${salesOrderName}'.`, data: null };
+    console.error('Technical Error in compareOrdersAction:', e); // Log the detailed technical error server-side
+
+    let userFriendlyError = 'An unexpected error occurred while comparing orders. Please try again. If the problem persists, contact support.';
+
+    if (e.message) {
+      if (e.message.includes('Odoo authentication failed') || e.message.includes('Failed to authenticate with Odoo') || e.message.includes('Invalid credentials')) {
+        userFriendlyError = 'Authentication with the order system failed. Please check system credentials or contact support.';
+      } else if (e.message.includes('ECONNREFUSED')) {
+        userFriendlyError = `Unable to connect to the order system. Please check network connectivity or contact support.`;
+      } else if (e.message.includes('Odoo configuration error') || e.message.includes('Odoo environment variables are not properly configured')) {
+        userFriendlyError = 'The order system is not configured correctly. Please contact support.';
+      } else if (e.message.includes('not found in Odoo')) {
+        userFriendlyError = `The Sales Order '${salesOrderName}' could not be found. Please verify the name and try again.`;
+      } else if (e.message.includes('Error fetching Sales Order from Odoo') || e.message.includes('Error fetching PO attachments from Odoo')) {
+        userFriendlyError = 'There was a problem retrieving documents from the order system. Please try again later.';
+      } else if (e.message.includes('AI Model/API Key Error') || e.message.includes('AI model failed') || e.message.includes('Genkit')) {
+        userFriendlyError = 'The AI comparison service encountered an issue. Please try again. If it continues, contact support.';
+      }
+      // For other generic errors, the default userFriendlyError will be used.
     }
-    return { error: e.message || 'An unexpected error occurred during order comparison.', data: null };
+    return { error: userFriendlyError, data: null };
   }
 }
