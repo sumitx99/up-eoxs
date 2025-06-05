@@ -115,7 +115,7 @@ function OrderComparatorClientContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen p-4 md:p-8 bg-background">
-        <header className="my-8 text-center"> {/* Adjusted margin to my-8 to give space if logo was removed */}
+        <header className="my-8 text-center">
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
             <h1 className="text-4xl font-bold text-foreground">EOXS AI comparator</h1>
@@ -135,7 +135,7 @@ function OrderComparatorClientContent() {
                     Sales Order for Comparison
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    The system automatically fetches and compares the SO (and linked PO) based on the identifier from the URL.
+                    The system automatically fetches and compares the specified Sales Order and any linked Purchase Orders from the ERP.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -150,7 +150,7 @@ function OrderComparatorClientContent() {
                           </p>
                         ) : (
                           <p id="salesOrderNameDisplay" className="text-lg text-muted-foreground py-2 px-3 border rounded-md">
-                            No Sales Order specified in URL. Waiting for SO name...
+                            Awaiting Sales Order information to begin comparison.
                           </p>
                         )}
                       </div>
@@ -358,8 +358,8 @@ function OrderComparatorClientContent() {
               {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <Search className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Waiting for Sales Order name from URL to begin comparison.</p>
-                  <p className="text-sm">Please ensure 'so_name' parameter is in the URL.</p>
+                  <p className="text-lg">Awaiting Sales Order identifier to proceed.</p>
+                  <p className="text-sm">Please ensure a valid Sales Order is provided.</p>
                 </div>
               )}
             </CardContent>
@@ -390,6 +390,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
