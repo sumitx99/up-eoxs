@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'EOXS AI comparator',
   description: 'AI-powered tool to compare purchase and sales orders.',
+  icons: null, // Prevent Next.js from processing default icon files like src/app/favicon.ico
 };
 
 export default function RootLayout({
