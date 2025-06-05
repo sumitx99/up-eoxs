@@ -140,26 +140,35 @@ Purchase Order Document(s) (PO):
     The Sales Order will be analyzed as if no valid Purchase Order was available. For any fields or items that would normally come from a Purchase Order, indicate "N/A - PO Not Processed" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Note the absence of a usable PO in your summary.
   {{/if}}
 {{else}}
-  No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Your summary should state: "Sales Order processed. No Purchase Order was provided for comparison; all SO items are listed as SO_ONLY".
+  No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Your summary should state: "No PO-orders were found".
 {{/if}}
 
 Based on your analysis of the document contents, provide the following in a valid JSON format:
 
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
    **A. Discrepancies:** Identify general discrepancies (non-product line items) such as PO Number, Payment Terms, Buyer/Seller addresses, or overall totals/discounts/taxes. For each, populate the 'discrepancies' array with objects specifying: 'field', 'purchaseOrderValue' (from first PO, or "No PO Provided", or "PO Not Processed"), 'salesOrderValue' (from SO), and 'reason'. Also, include any products found in one order but not the other (e.g., field: "Unmatched PO Product: [Product Name/SKU]", salesOrderValue: "Not found in SO", reason: "Product in PO only").
-   **B. Matched Items:** Identify general matching items/fields (non-product line items). For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'.
+   **B. Matched Items:** Identify general matching items/fields (non-product line items) between the SO and the **first PO (if provided and processed)**. For each, populate the 'matchedItems' array with objects specifying: 'field', 'value', 'matchQuality'.
 
 **2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
    - Perform a detailed comparison of product line items between the SO and the **first PO (if provided and processed)**. If no PO provided/processed, all SO items are 'SO_ONLY'.
    - For each line item pairing (or an item found only in one document):
+     - **Crucially, for all numeric fields (Quantity, UnitPrice, TotalPrice), you must extract the values exactly as they appear in the document, including all visible decimal places. Do not round or normalize these numbers during the initial extraction step. The comparison of these extracted values will be handled by the status logic that follows.** After extraction, for comparison purposes, you may remove common currency symbols (e.g., $, €) and thousands separators (e.g., commas) before attempting numerical comparison.
      - Extract 'poProductDescription', 'poQuantity', 'poUnitPrice', 'poTotalPrice' from the first PO (use "N/A", "No PO Provided", or "PO Not Processed" if SO_ONLY, no PO, or detail missing).
      - Extract 'soProductDescription', 'soQuantity', 'soUnitPrice', 'soTotalPrice' from the SO (use "N/A" if PO_ONLY or detail missing).
-     - Determine 'status': 'MATCHED' (descriptions and all numeric values identical), 'MISMATCH_QUANTITY', 'MISMATCH_UNIT_PRICE', 'MISMATCH_TOTAL_PRICE', 'MISMATCH_DESCRIPTION', 'PO_ONLY', 'SO_ONLY', 'PARTIAL_MATCH_DETAILS_DIFFER'.
+     - Determine 'status': 
+        'MATCHED' (Product descriptions match or are semantically equivalent AND all corresponding numeric values - Quantity, Unit Price, Total Price - are numerically identical after faithful extraction and basic formatting for comparison), 
+        'MISMATCH_QUANTITY', 
+        'MISMATCH_UNIT_PRICE', 
+        'MISMATCH_TOTAL_PRICE', 
+        'MISMATCH_DESCRIPTION', 
+        'PO_ONLY', 
+        'SO_ONLY', 
+        'PARTIAL_MATCH_DETAILS_DIFFER'.
      - Provide 'comparisonNotes' explaining the status.
    - Populate the 'productLineItemComparisons' array.
 
 **3. Summary ('summary' field):**
-   Provide a concise 'summary' of the overall comparison. Highlight key discrepancies, confirmed matches, and product line item findings. If no PO was provided, state: "Sales Order processed. No Purchase Order was provided for comparison; all SO items are listed as SO_ONLY". If a PO was expected but couldn't be processed, note this. If any limitations were encountered processing the entirety of any document, explicitly state this.
+   Provide a concise 'summary' of the overall comparison. Highlight key discrepancies, confirmed matches, and product line item findings. If no PO was provided, state: "No PO-orders were found". If a PO was expected but couldn't be processed, note this. If any limitations were encountered processing the entirety of any document, explicitly state this.
 
 **Important Output Structure:**
 - The 'discrepancies', 'matchedItems', and 'productLineItemComparisons' arrays should always be present as keys. If none are found, their value should be an empty array (\`[]\`).
@@ -251,9 +260,12 @@ const compareOrderDetailsFlow = ai.defineFlow(
       if (error instanceof Error) {
         if (error.message.includes("is not found for API version") || error.message.includes("API key not valid") || error.message.includes("Permission denied")) {
             errorMessage = `AI Model/API Key Error: ${error.message}. Please check model availability and API key permissions.`;
-        } else if (error.message.includes("Invalid input")) { // Example of catching a specific Zod or Genkit error
-            errorMessage = `There was an issue with the data provided to the AI: ${error.message}`;
-        } else {
+        } else if (error.message.includes("Invalid input") || error.message.includes("Request payload size exceeds the limit")) { 
+            errorMessage = `There was an issue with the data provided to the AI: ${error.message}. This could be due to very large documents or an internal processing error.`;
+        } else if (error.message.includes("upstream connect error") || error.message.includes("Deadline exceeded")) {
+            errorMessage = `The AI service is currently unavailable or timed out. Please try again later. Error: ${error.message}`;
+        }
+         else {
             errorMessage = `An error occurred in the AI flow: ${error.message}`;
         }
       } else {
