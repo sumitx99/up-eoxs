@@ -112,10 +112,10 @@ The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) 
 Analyze the content of the following Sales Order document and any provided Purchase Order documents:
 Ensure you process all pages and sections of each document.
 
-Sales Order Document:
+Sales Order Document (SO):
 {{media url=salesOrderPdfDataUri}}
 
-Purchase Order Document(s):
+Purchase Order Document(s) (PO):
 {{#if hasPurchaseOrders}}
   {{#if firstPurchaseOrderPdfDataUri}}
     {{#if isSinglePO}}
@@ -140,18 +140,27 @@ Purchase Order Document(s):
     The Sales Order will be analyzed as if no valid Purchase Order was available. For any fields or items that would normally come from a Purchase Order, indicate "N/A - PO Not Processed" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Note the absence of a usable PO in your summary.
   {{/if}}
 {{else}}
-  No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Note the absence of a PO in your summary.
+  No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Your summary should state: "No PO-orders were found".
 {{/if}}
+
+**CRITICAL DOCUMENT ROLE ASSIGNMENT:**
+You have been provided with one **Primary Sales Document** (referred to as Sales Order or SO) and potentially one or more **Secondary Purchase Documents** (referred to as Purchase Order(s) or PO(s)).
+- The document provided via \`{{media url=salesOrderPdfDataUri}}\` is ALWAYS the **Primary Sales Document (SO)**.
+- Any document(s) provided via \`{{media url=firstPurchaseOrderPdfDataUri}}\` (and \`additionalPurchaseOrderUris\`) are **Secondary Purchase Document(s) (PO)**.
+Your entire comparison must be between the **Primary Sales Document (SO)** and the first **Secondary Purchase Document (PO)** (if available and processed).
+- When populating output fields like \`salesOrderValue\`, \`soProductDescription\`, \`soQuantity\`, \`soUnitPrice\`, \`soTotalPrice\`, etc., these values MUST originate EXCLUSIVELY from the **Primary Sales Document (SO)**.
+- When populating output fields like \`purchaseOrderValue\`, \`poProductDescription\`, \`poQuantity\`, \`poUnitPrice\`, \`poTotalPrice\`, etc., these values MUST originate EXCLUSIVELY from the first valid **Secondary Purchase Document (PO)**.
+Do not mix data sources for these fields. Adherence to this role assignment is paramount for accurate comparison.
 
 Based on your analysis of the document contents, provide the following in a valid JSON format:
 
 **1. General Document Field Comparison (for 'discrepancies' and 'matchedItems' arrays):**
-   (Instructions for this section remain largely the same, but remember to specify "first PO", "No PO Provided", or "PO Not Processed" where applicable)
+   (Instructions for this section remain largely the same, but remember to specify "first PO", "No PO Provided", or "PO Not Processed" where applicable, and adhere to the strict document role assignment above)
 
    **A. Document-Level Field Discrepancies:**
-      - Meticulously compare **general document fields that are NOT product line items** between the Sales Order and the **first Purchase Order (if provided and processed)**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
+      - Meticulously compare **general document fields that are NOT product line items** between the Sales Order (SO) and the **first Purchase Order (first PO, if provided and processed)**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
       - **Pay extremely close attention to Buyer/Customer names and their full addresses (Shipping and Billing). Even minor differences in names (e.g., 'Titan Steel Works' vs. 'Steel America') or any significant differences in address components (street, city, state, zip code) MUST be flagged as discrepancies.** Do not assume entities are the same if their names or addresses show such variations.
-      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address", "Buyer Name"), 'purchaseOrderValue' (from first PO, or "No PO Provided", or "PO Not Processed"), 'salesOrderValue', and 'reason' for the discrepancy (e.g., "Buyer names differ", "Shipping addresses do not match").
+      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address", "Buyer Name"), 'purchaseOrderValue' (from first PO, or "No PO Provided", or "PO Not Processed"), 'salesOrderValue' (from SO), and 'reason' for the discrepancy (e.g., "Buyer names differ", "Shipping addresses do not match").
 
    **B. Unmatched Product Line Item Discrepancies:**
       - During your detailed product line item analysis (detailed in section 2 below), you will identify some products as 'PO_ONLY' or 'SO_ONLY'.
@@ -176,15 +185,16 @@ Based on your analysis of the document contents, provide the following in a vali
    - Perform a detailed comparison of product line items between the SO and the **first PO (if one was provided and processed)**. For each product line item found in the SO, try to find its corresponding item in the first PO (and vice-versa). Strive to find the best possible match for product descriptions, even if there are minor wording differences, acronyms, or variations in item codes/SKUs. Focus on semantic similarity where appropriate.
    - If no PO was provided or processed, all SO line items should be marked as 'SO_ONLY'.
    - For each identified product line item pairing (or an item found only in one document):
-     - Once a potential product pairing is identified based on description/SKU, you *must* then thoroughly compare their respective quantities, unit prices, and total prices to determine the correct status. Do not assume a full match based on description alone; all corresponding details for that line item must be scrutinized.
-     - Extract 'poProductDescription', 'poQuantity', 'poUnitPrice', 'poTotalPrice' from the **first PO (if available and processed)**. Use "N/A", "No PO Provided", or "PO Not Processed" if the item is SO_ONLY, no PO was provided/processed, or if a specific detail is not present/extractable from the PO line item.
-     - Extract 'soProductDescription', 'soQuantity', 'soUnitPrice', 'soTotalPrice' from the SO. Use "N/A" if the item is PO_ONLY or if a specific detail is not present/extractable from the SO line item.
+     - **Crucially, for all numeric fields (Quantity, UnitPrice, TotalPrice), you must extract the values exactly as they appear in the document, including all visible decimal places. Do not round or normalize these numbers during the initial extraction step. The comparison of these extracted values will be handled by the status logic that follows.** After extraction, for comparison purposes, you may remove common currency symbols (e.g., $, €) and thousands separators (e.g., commas) before attempting numerical comparison.
+     - Once a potential product pairing is identified based on description/SKU, you *must* then thoroughly compare their respective quantities, unit prices, and total prices (after faithful extraction as noted above) to determine the correct status. Do not assume a full match based on description alone; all corresponding details for that line item must be scrutinized.
+     - Extract 'poProductDescription', 'poQuantity', 'poUnitPrice', 'poTotalPrice' from the **first PO (if available and processed)**, adhering to the exact extraction rule for numerics. Use "N/A", "No PO Provided", or "PO Not Processed" if the item is SO_ONLY, no PO was provided/processed, or if a specific detail is not present/extractable from the PO line item.
+     - Extract 'soProductDescription', 'soQuantity', 'soUnitPrice', 'soTotalPrice' from the SO, adhering to the exact extraction rule for numerics. Use "N/A" if the item is PO_ONLY or if a specific detail is not present/extractable from the SO line item.
      - Determine a 'status':
-       - 'MATCHED': If description, quantity, and prices (unit and total, or equivalent if one is missing but calculable) appear to match closely or are equivalent between SO and first PO.
-       - 'MISMATCH_QUANTITY': If quantities differ significantly.
-       - 'MISMATCH_UNIT_PRICE': If unit prices differ significantly.
-       - 'MISMATCH_TOTAL_PRICE': If total line item prices differ significantly (and unit price/qty might also be causes).
-       - 'MISMATCH_DESCRIPTION': If products seem related (e.g., similar SKUs) but descriptions have notable, irreconcilable differences.
+       - 'MATCHED': Product descriptions (or SKUs/item codes) match or are semantically equivalent AND **all corresponding numeric values (Quantity, Unit Price, Total Price) are numerically identical** after faithful extraction and basic formatting (removal of currency symbols/commas).
+       - 'MISMATCH_QUANTITY': Descriptions match, but quantities differ numerically.
+       - 'MISMATCH_UNIT_PRICE': Descriptions match, but unit prices differ numerically.
+       - 'MISMATCH_TOTAL_PRICE': Descriptions match, but total line item prices differ numerically.
+       - 'MISMATCH_DESCRIPTION': Products seem related (e.g., similar SKUs) but descriptions have notable, irreconcilable differences, even if some numeric values happen to match.
        - 'PO_ONLY': If the item is found only in the first Purchase Order (and it was processed) and has no corresponding item in the Sales Order.
        - 'SO_ONLY': If the item is found only in the Sales Order and has no corresponding item in the first Purchase Order (or if no PO was provided/processed).
        - 'PARTIAL_MATCH_DETAILS_DIFFER': If it's likely the same core product but some key details (other than quantity or price that would trigger a specific mismatch status) are inconsistent, or if the match is inferred with lower confidence.
@@ -192,7 +202,7 @@ Based on your analysis of the document contents, provide the following in a vali
    - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document (or only in SO and no PO provided/processed), this array should reflect that (e.g., list SO items as SO_ONLY, or be empty if SO is also empty).
 
 **3. Summary ('summary' field):**
-   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched with first PO, 1 had quantity mismatch, 1 PO item not in SO"). If no PO was provided, state this clearly (e.g., "Sales Order processed. No Purchase Order was provided for comparison; all SO items are listed as SO_ONLY."). If a PO was expected but could not be processed, note this (e.g., "Sales Order processed. A Purchase Order was expected but could not be processed; comparison proceeded with SO only."). If any limitations were encountered processing the entirety of any document, you MUST explicitly state this limitation in your summary.
+   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched with first PO, 1 had quantity mismatch, 1 PO item not in SO"). If no PO was provided, state: "No PO-orders were found". If a PO was expected but could not be processed, note this (e.g., "Sales Order processed. A Purchase Order was expected but could not be processed; comparison proceeded with SO only."). If any limitations were encountered processing the entirety of any document, you MUST explicitly state this limitation in your summary. If the request payload was too large for the AI model to fully process, or if the AI model indicated a timeout or processing limit was reached, this MUST be noted in the summary.
 
 **Important Output Structure:**
 - The 'discrepancies' array should always be present as a key in the root JSON object. If no general discrepancies are found, its value should be an empty array (\`[]\`).
@@ -244,30 +254,73 @@ const compareOrderDetailsFlow = ai.defineFlow(
         additionalPOCount: additionalPOs.length,
       };
 
+      if (!internalPromptInput.salesOrderPdfDataUri || internalPromptInput.salesOrderPdfDataUri.trim() === '') {
+        console.error('CompareOrderDetailsFlow: Sales Order PDF data URI is empty or missing.');
+        return {
+          discrepancies: [],
+          matchedItems: [],
+          productLineItemComparisons: [],
+          summary: 'Comparison failed: The Sales Order document is missing or could not be processed. Please verify the Sales Order in the ERP system.',
+        };
+      }
+
       const { output: aiPermissiveOutput } = await compareOrderDetailsPrompt(internalPromptInput);
 
       if (!aiPermissiveOutput) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output payload.');
-        throw new Error('AI model failed to return valid comparison data. Please check the documents or try again.');
+        return {
+            discrepancies: [],
+            matchedItems: [],
+            productLineItemComparisons: [],
+            summary: 'AI model failed to return valid comparison data. Please check the documents or try again. Ensure the Sales Order document is readable.',
+        };
       }
       
       const finalOutput: CompareOrderDetailsOutput = {
         discrepancies: Array.isArray(aiPermissiveOutput.discrepancies) ? aiPermissiveOutput.discrepancies : [],
         matchedItems: Array.isArray(aiPermissiveOutput.matchedItems) ? aiPermissiveOutput.matchedItems : [],
         productLineItemComparisons: Array.isArray(aiPermissiveOutput.productLineItemComparisons) ? aiPermissiveOutput.productLineItemComparisons : [],
-        summary: typeof aiPermissiveOutput.summary === 'string' ? aiPermissiveOutput.summary : 'AI did not provide a summary for this comparison.',
+        summary: typeof aiPermissiveOutput.summary === 'string' && aiPermissiveOutput.summary.trim() !== '' ? aiPermissiveOutput.summary : 'AI did not provide a summary for this comparison.',
       };
       
       return finalOutput;
+
     } catch (error: unknown) { 
       console.error("Error in compareOrderDetailsFlow: ", error);
+      let tempErrorMessage = 'An unexpected error occurred during the AI comparison process. Please try again.';
+      
       if (error instanceof Error) {
-        if (error.message.includes("is not found for API version") || error.message.includes("API key not valid") || error.message.includes("Permission denied")) {
-            throw new Error(`AI Model/API Key Error: ${error.message}. Please check model availability and API key permissions.`);
+        // Check for specific error messages that indicate payload size or timeout issues
+        if (error.message.toLowerCase().includes("request payload size exceeds the limit") || 
+            error.message.toLowerCase().includes("payload too large")) {
+          tempErrorMessage = 'The document(s) provided are too large for the AI to process. Please try with smaller files or ensure they are not corrupted.';
+        } else if (error.message.toLowerCase().includes("deadline exceeded") || 
+                   error.message.toLowerCase().includes("timeout")) {
+          tempErrorMessage = 'The AI service took too long to respond. This might be due to very large documents or high server load. Please try again later.';
+        } else if (error.message.includes("is not found for API version") || error.message.includes("API key not valid") || error.message.includes("Permission denied")) {
+            tempErrorMessage = `AI Model/API Key Error: ${error.message}. Please check model availability and API key permissions.`;
+        } else if (error.message.includes("Invalid input")) { 
+            tempErrorMessage = `There was an issue with the data provided to the AI: ${error.message}`;
+        } else {
+            tempErrorMessage = `An error occurred in the AI flow: ${error.message}`;
         }
-        throw error;
+      } else {
+        tempErrorMessage = `An unknown error occurred in the AI flow: ${String(error)}`;
       }
-      throw new Error(String(error));
+
+      // Sanitize the specific "circular structure" message
+      if (typeof tempErrorMessage === 'string' && tempErrorMessage.includes('Converting circular structure to JSON')) {
+        tempErrorMessage = 'An internal error occurred while processing the AI request. The AI service may have encountered an issue with the data structure. Please try again or check the document contents.';
+      }
+
+      return {
+        discrepancies: [],
+        matchedItems: [],
+        productLineItemComparisons: [],
+        summary: tempErrorMessage,
+      };
     }
   }
 );
+
+    
