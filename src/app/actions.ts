@@ -196,13 +196,7 @@ export async function compareOrdersAction(
         if (lowerCaseMessage.includes("authentication failed") ||
             lowerCaseMessage.includes("login failed") ||
             lowerCaseMessage.includes("returned an invalid uid")) {
-            
-            let authFailedMessage = `Odoo Authentication Failed: ${e.message}. Please check server credentials for Odoo.`;
-            if (lowerCaseMessage.includes("unknown xml-rpc tag")) {
-                authFailedMessage += " This specific error often means the Odoo URL (ODOO_URL) is incorrect or points to an HTML page instead of an XML-RPC endpoint. Please verify your ODOO_URL environment variable."
-            }
-            clientFacingMessage = authFailedMessage;
-
+            clientFacingMessage = `Odoo Authentication Failed: ${e.message}. Please check server credentials for Odoo.`;
         } else if (lowerCaseMessage.includes("not found in odoo")) {
             clientFacingMessage = `Odoo Data Error: ${e.message}. Ensure the Sales Order name is correct.`;
         } else if (lowerCaseMessage.includes("failed to download pdf") ||
@@ -215,7 +209,7 @@ export async function compareOrdersAction(
         } else if (lowerCaseMessage.includes("consumer_suspended") || lowerCaseMessage.includes("permission denied") || lowerCaseMessage.includes("api key not valid")) {
             clientFacingMessage = `AI Service Error: Issue with API key or billing: ${e.message}. Check Google Cloud settings.`;
         } else if (lowerCaseMessage.includes("schema validation failed") || lowerCaseMessage.includes("invalid_argument")) {
-           clientFacingMessage = `The AI service returned an unexpected data format, or there was an issue preparing documents for comparison. Please try again. If the problem persists, contact support. Original error: ${e.message}`;
+           clientFacingMessage = `AI Data Error: The AI's response was not in the expected format, or a document was unprocessable. Original error: ${e.message}`;
         } else if (lowerCaseMessage.includes("ai model encountered an issue during processing") || lowerCaseMessage.includes("ai model failed to return valid comparison data")) {
             clientFacingMessage = e.message;
         }
@@ -280,49 +274,13 @@ async function fetchPurchaseOrderPdfsFromOdoo(
 
   const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
 
-  // Define multiple patterns for PO filenames
-  // Odoo's 'ilike' is case-insensitive. '%' is the wildcard.
-  const poNamePatterns = [
-    '%Purchase%Order%', // Contains "Purchase Order"
-    'PO %',             // Starts with "PO "
-    'PO-%',             // Starts with "PO-"
-    'PO_%',             // Starts with "PO_"
-    'P0%_%-%_%',        // Matches P0<something>_<date-like>_<time-like>
-    'P1%_%-%_%',        // Matches P1<something>_<date-like>_<time-like> (etc. for other digits)
-    'P2%_%-%_%',
-    'P3%_%-%_%',
-    'P4%_%-%_%',
-    'P5%_%-%_%',
-    'P6%_%-%_%',
-    'P7%_%-%_%',
-    'P8%_%-%_%',
-    'P9%_%-%_%',
-    '____.pdf',         // Catches 4-digit names like 8987.pdf (adjust if more digits needed)
-    '_____.pdf',        // Catches 5-digit names
-    '______.pdf'        // Catches 6-digit names
-  ];
-
-  // Build the OR part of the domain
-  const nameFilterDomain = ['|', ['name', 'ilike', poNamePatterns[0]]]; // Start with first pattern
-  let currentDomain = nameFilterDomain;
-  for (let i = 1; i < poNamePatterns.length; i++) {
-    currentDomain.push(['name', 'ilike', poNamePatterns[i]]);
-    if (i < poNamePatterns.length - 1) { // Add a new '|' for the next OR condition
-      const nextLevelDomain: any[] = ['|', currentDomain];
-      currentDomain.splice(0, currentDomain.length, ...nextLevelDomain); // Replace currentDomain content
-      currentDomain = nextLevelDomain; // Point to the new currentDomain
-    }
-  }
-  
+  // Search ir.attachment for PDFs linked to the Sales Order, filtered by name for POs
   const attSearchDomain = [
     ["res_model", "=", "sale.order"],
     ["res_id", "=", saleOrderId],
     ["mimetype", "=", "application/pdf"],
-    ...nameFilterDomain // Add the combined name filters
+    ["name", "ilike", "Purchase%Order%"]
   ];
-  
-  console.log("SERVER_ACTION: Odoo attachment search domain for POs:", JSON.stringify(attSearchDomain, null, 2));
-
 
   let attachments: Array<{ id: number; name: string; datas: string; file_size: number }>;
   try {
@@ -366,7 +324,11 @@ async function fetchPurchaseOrderPdfsFromOdoo(
       console.warn(`SERVER_ACTION: Attachment '${att.name}' (id=${att.id}) for SO ID ${saleOrderId} has no 'datas'. Skipping.`);
       continue;
     }
-    
+    // Odoo's file_size is authoritative. 'datas' can sometimes be just a checksum if stored externally.
+    // However, for direct PDF generation, 'datas' being non-empty is key.
+    // If att.file_size is 0 but datas exists, it's odd. If datas is missing, file_size might still be there.
+    // We rely on 'datas' for the data URI.
+
     const binary = Buffer.from(att.datas, "base64");
     if (binary.byteLength === 0) {
         console.warn(`SERVER_ACTION: Decoded PDF data for attachment '${att.name}' (id=${att.id}) on SO ID ${saleOrderId} is empty (0 bytes). Actual file_size from Odoo: ${att.file_size}. Skipping.`);
@@ -376,9 +338,9 @@ async function fetchPurchaseOrderPdfsFromOdoo(
     const dataUri = `data:application/pdf;base64,${att.datas}`;
     results.push({
       dataUri,
-      fileName: `${att.name.replace(/[\s/]/g, "_")}`, 
+      fileName: `${att.name.replace(/[\s/]/g, "_")}`, // Use actual attachment name for file
       originalName: att.name,
-      size: binary.byteLength, 
+      size: binary.byteLength, // Size of the base64 decoded data
     });
   }
 
@@ -387,4 +349,3 @@ async function fetchPurchaseOrderPdfsFromOdoo(
   }
   return results;
 }
-

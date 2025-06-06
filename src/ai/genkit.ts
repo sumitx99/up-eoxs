@@ -20,4 +20,3 @@ export const ai = genkit({
   plugins: [googleAI({ apiKey })], // Explicitly passing the apiKey
   model: 'googleai/gemini-1.5-flash-latest', // Reverted to Gemini 1.5 Flash
 });
-

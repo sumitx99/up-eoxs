@@ -156,7 +156,7 @@ function OrderComparatorClientContent() {
                     Sales Order for Comparison
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    The system automatically fetches and compares the SO (and linked PO) based on the identifier from the URL.
+                    The system automatically fetches and compares the Sales Order (and linked Purchase Order) using the provided identifier.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -171,7 +171,7 @@ function OrderComparatorClientContent() {
                           </p>
                         ) : (
                           <p id="salesOrderNameDisplay" className="text-lg text-muted-foreground py-2 px-3 border rounded-md">
-                            No Sales Order specified in URL. Waiting for SO name...
+                            No Sales Order identifier provided. Waiting for identifier...
                           </p>
                         )}
                       </div>
@@ -380,8 +380,8 @@ function OrderComparatorClientContent() {
               {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <Search className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Waiting for Sales Order name from URL to begin comparison.</p>
-                  <p className="text-sm">Please ensure 'so_name' parameter is in the URL.</p>
+                  <p className="text-lg">Waiting for Sales Order identifier to begin comparison.</p>
+                  <p className="text-sm">The system is ready to process an order once an identifier is provided.</p>
                 </div>
               )}
             </CardContent>
@@ -407,6 +407,8 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+    
+
     
 
     
