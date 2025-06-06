@@ -3,19 +3,27 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
+// Removed: import { useActionState } from 'react';
+// Removed: import { useFormStatus } from 'react-dom';
+// Removed: import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+// Removed: import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
-import { compareOrdersAction, type CompareActionState } from './actions';
+import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+// Removed SubmitButton component
+
+// Define initialState for direct action call, though prevState might not be deeply used by the action in this scenario
 const initialActionState: CompareActionState = {
   error: null,
   data: null,
@@ -37,25 +45,28 @@ function OrderComparatorClientContent() {
 
     if (decodedSOName !== salesOrderName) {
       setSalesOrderName(decodedSOName);
+      // Reset states when SO name changes to allow new auto-comparison
       setComparisonResult(null);
       setError(null);
       setCurrentProcessedSOName(null); 
-      setIsLoading(false);
+      setIsLoading(false); // Ensure loading is reset
     }
   }, [searchParams, salesOrderName]);
 
 
   useEffect(() => {
+    // Automatically trigger comparison when salesOrderName is set from URL and not yet processed
     if (salesOrderName && salesOrderName.trim() !== '' && salesOrderName !== currentProcessedSOName && !isLoading) {
       const triggerComparison = async () => {
         setIsLoading(true);
         setError(null);
-        setComparisonResult(null);
+        setComparisonResult(null); // Clear previous results
 
         const formData = new FormData();
         formData.append('salesOrderName', salesOrderName);
 
         try {
+          // Directly call the server action
           const resultState = await compareOrdersAction(initialActionState, formData);
           
           if (resultState.error) {
@@ -74,7 +85,7 @@ function OrderComparatorClientContent() {
               description: "The order documents have been compared successfully.",
             });
           }
-          setCurrentProcessedSOName(salesOrderName);
+          setCurrentProcessedSOName(salesOrderName); // Mark this SO name as processed
         } catch (e: any) {
           const errorMessage = e.message || "An unexpected error occurred during comparison.";
           setError(errorMessage);
@@ -84,7 +95,7 @@ function OrderComparatorClientContent() {
               description: errorMessage,
               duration: 9000,
           });
-          setCurrentProcessedSOName(salesOrderName);
+          setCurrentProcessedSOName(salesOrderName); // Mark as processed even on error to prevent loops
         } finally {
           setIsLoading(false);
         }
@@ -115,7 +126,17 @@ function OrderComparatorClientContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen p-4 md:p-8 bg-background">
-        <header className="my-8 text-center">
+        <div className="w-full flex justify-end px-4 pt-4 mb-2">
+          <Image
+            src="/eoxs-logo(1).svg" 
+            alt="EOXS Logo"
+            width={128} 
+            height={62} 
+            className="object-contain"
+            priority 
+          />
+        </div>
+        <header className="mb-8 text-center">
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
             <h1 className="text-4xl font-bold text-foreground">EOXS AI comparator</h1>
@@ -135,7 +156,7 @@ function OrderComparatorClientContent() {
                     Sales Order for Comparison
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    The system automatically fetches and compares the specified Sales Order and any linked Purchase Orders from the ERP.
+                    The system automatically fetches and compares the SO (and linked PO) based on the identifier from the URL.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -150,11 +171,12 @@ function OrderComparatorClientContent() {
                           </p>
                         ) : (
                           <p id="salesOrderNameDisplay" className="text-lg text-muted-foreground py-2 px-3 border rounded-md">
-                            Awaiting Sales Order information to begin comparison.
+                            No Sales Order specified in URL. Waiting for SO name...
                           </p>
                         )}
                       </div>
                     </CardContent>
+                    {/* Removed CardFooter with submit button */}
                 </Card>
               </AccordionContent>
             </AccordionItem>
@@ -358,8 +380,8 @@ function OrderComparatorClientContent() {
               {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <Search className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Awaiting Sales Order identifier to proceed.</p>
-                  <p className="text-sm">Please ensure a valid Sales Order is provided.</p>
+                  <p className="text-lg">Waiting for Sales Order name from URL to begin comparison.</p>
+                  <p className="text-sm">Please ensure 'so_name' parameter is in the URL.</p>
                 </div>
               )}
             </CardContent>
@@ -388,12 +410,3 @@ export default function OrderComparatorPage() {
     
 
     
-
-    
-
-
-
-
-
-
-
