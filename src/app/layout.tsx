@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'EOXS AI comparator',
-  description: 'AI-powered tool to compare purchase and sales orders.',
+  title: 'Contract Review AI',
+  description: 'AI-powered contract review.',
 };
 
 export default function RootLayout({

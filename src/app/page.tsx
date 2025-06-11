@@ -25,12 +25,12 @@ const initialActionState: CompareActionState = {
 
 function OrderComparatorClientContent() {
   const [salesOrderName, setSalesOrderName] = useState<string>('');
-  const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null); // Changed to single file
+  const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentProcessedSOName, setCurrentProcessedSOName] = useState<string | null>(null);
-  const [currentProcessedPOFileSignature, setCurrentProcessedPOFileSignature] = useState<string | null>(null); // Signature for single PO file
+  const [currentProcessedPOFileSignature, setCurrentProcessedPOFileSignature] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -45,62 +45,68 @@ function OrderComparatorClientContent() {
       setComparisonResult(null);
       setError(null);
       setCurrentProcessedSOName(null);
-      setIsLoading(false);
+      // No auto-loading, so setIsLoading(false) might not be needed here
+      // or if it is, ensure it's based on a clear loading state, not just salesOrderName change
     }
   }, [searchParams, salesOrderName]);
 
 
   const handlePOFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      setPurchaseOrderFile(event.target.files[0]); // Set the first (and only) file
-      setComparisonResult(null);
-      setError(null);
+      setPurchaseOrderFile(event.target.files[0]);
+      setComparisonResult(null); // Reset comparison if PO file changes
+      setError(null); // Reset error if PO file changes
     } else {
-      setPurchaseOrderFile(null); // Clear if no file selected
+      setPurchaseOrderFile(null);
+      // Optionally reset comparisonResult and error if the file is cleared
+      // setComparisonResult(null);
+      // setError(null);
     }
   };
 
   const removePOFile = () => {
     setPurchaseOrderFile(null);
-    setCurrentProcessedPOFileSignature(null);
+    setCurrentProcessedPOFileSignature(null); // Reset signature when file is removed
     if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        fileInputRef.current.value = ''; // Clears the file input visually
     }
+    // Optionally reset comparisonResult and error if the file is removed
+    // setComparisonResult(null);
+    // setError(null);
   };
 
   const handleSubmit = useCallback(async () => {
     if (!salesOrderName || salesOrderName.trim() === '') {
-      // This case should ideally be handled by the useEffect trigger condition
-      // but as a safeguard:
-      setError('Sales Order identifier is required for comparison.');
-      toast({ variant: "destructive", title: "Input Missing", description: "Sales Order identifier is required." });
+      setError('Sales Order is required for comparison.');
+      toast({ variant: "destructive", title: "Input Missing", description: "Sales Order is required." });
       return;
     }
 
     if (!purchaseOrderFile) {
-      // If auto-submit relies on PO file, this might not be an error,
-      // but a state where comparison isn't ready yet.
-      // For now, let's assume auto-submit means PO is expected.
       setError('Purchase Order file is required for comparison.');
       toast({ variant: "destructive", title: "Input Missing", description: "Purchase Order file is required." });
       return;
     }
     
+    // Generate a signature for the current PO file to prevent reprocessing identical inputs
     const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
+
+    // Check if current inputs match already processed inputs AND there's an existing result or error
     if (salesOrderName === currentProcessedSOName && 
         poFileSignature === currentProcessedPOFileSignature &&
-        comparisonResult) { 
+        (comparisonResult || error) // if there was a result OR an error for this combo, don't re-run
+        ) { 
       toast({ title: "No Changes", description: "The same Sales Order and Purchase Order file are already processed." });
       return; 
     }
 
     setIsLoading(true);
     setError(null);
-    setComparisonResult(null);
+    setComparisonResult(null); // Clear previous results before new comparison
 
     const formData = new FormData();
     formData.append('salesOrderName', salesOrderName);
-    formData.append('purchaseOrderFile', purchaseOrderFile); // Append single file
+    formData.append('purchaseOrderFile', purchaseOrderFile);
 
     try {
       const resultState = await compareOrdersAction(initialActionState, formData);
@@ -111,7 +117,7 @@ function OrderComparatorClientContent() {
           variant: "destructive",
           title: "Comparison Failed",
           description: resultState.error,
-          duration: 9000,
+          duration: 9000, // Longer duration for error messages
         });
       }
       if (resultState.data) {
@@ -121,6 +127,7 @@ function OrderComparatorClientContent() {
           description: "The order documents have been compared successfully.",
         });
       }
+      // Update processed state *after* the call, regardless of success or failure
       setCurrentProcessedSOName(salesOrderName);
       setCurrentProcessedPOFileSignature(poFileSignature); 
     } catch (e: any) {
@@ -132,24 +139,26 @@ function OrderComparatorClientContent() {
           description: errorMessage,
           duration: 9000,
       });
+      // Still update processed state to prevent immediate re-triggering on error
       setCurrentProcessedSOName(salesOrderName); 
       setCurrentProcessedPOFileSignature(poFileSignature);
     } finally {
       setIsLoading(false);
     }
-  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, toast]);
+  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]); // Added 'error' to dependency array
   
   useEffect(() => {
+    // This effect triggers the comparison automatically when both SO name and PO file are present
+    // and they haven't been processed together yet, or if they have changed.
     if (salesOrderName && salesOrderName.trim() !== '' && purchaseOrderFile) {
-      // Only submit if not currently loading and the input combination hasn't been processed or resulted in an error for this exact combo
       const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
-      const alreadyProcessed = (
+      const alreadyProcessedThisCombination = (
         salesOrderName === currentProcessedSOName &&
         poFileSignature === currentProcessedPOFileSignature &&
-        (comparisonResult || error) // if there was a result OR an error for this combo, don't re-run
+        (comparisonResult || error) // Important: If there's an error for this combo, don't re-run
       );
 
-      if (!isLoading && !alreadyProcessed) {
+      if (!isLoading && !alreadyProcessedThisCombination) {
          handleSubmit();
       }
     }
@@ -181,11 +190,8 @@ function OrderComparatorClientContent() {
         <header className="mb-8 text-center pt-4">
           <div className="flex items-center justify-center mb-2">
             <Scale className="h-12 w-12 text-primary mr-3" />
-            <h1 className="text-4xl font-bold text-foreground">EOXS AI comparator</h1>
+            <h1 className="text-4xl font-bold text-foreground">Contract Review AI</h1>
           </div>
-          <p className="text-muted-foreground text-lg">
-            AI-powered tool to compare purchase orders with sales orders.
-          </p>
         </header>
 
         <div className="w-full max-w-6xl mx-auto grid grid-cols-1 gap-8">
@@ -197,23 +203,20 @@ function OrderComparatorClientContent() {
                     <Search className="mr-3 h-7 w-7 text-primary" />
                     Order Documents Input
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-1.5">
-                    Provide the Sales Order identifier and manually upload a Purchase Order document for comparison.
-                  </p>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-0">
                 <Card className="shadow-none border-0 rounded-t-none">
                     <CardContent className="space-y-6 pt-6 p-6">
                        <div className="space-y-2">
-                        <Label htmlFor="salesOrderNameDisplay" className="text-base font-medium">Sales Order Identifier:</Label>
+                        <Label htmlFor="salesOrderNameDisplay" className="text-base font-medium">Sales Order:</Label>
                         {salesOrderName ? (
                            <p id="salesOrderNameDisplay" className="text-md font-semibold text-primary py-2 px-3 border rounded-md bg-secondary/30">
                             {salesOrderName}
                           </p>
                         ) : (
                           <p id="salesOrderNameDisplay" className="text-md text-muted-foreground py-2 px-3 border rounded-md">
-                            No Sales Order identifier provided. Waiting for identifier...
+                            No Sales Order provided. Waiting for identifier...
                           </p>
                         )}
                       </div>
@@ -233,7 +236,6 @@ function OrderComparatorClientContent() {
                         <p className="text-xs text-muted-foreground">Upload one PDF, image (PNG, JPG), CSV, or Excel file.</p>
                         {purchaseOrderFile && (
                           <div className="mt-2 space-y-1">
-                            <p className="text-sm font-medium">Selected PO file:</p>
                             <div className="flex items-center justify-between text-sm text-muted-foreground p-2 border rounded-md">
                               <span className="truncate" title={purchaseOrderFile.name}>
                                 {purchaseOrderFile.name} ({(purchaseOrderFile.size / 1024).toFixed(1)} KB)
@@ -255,9 +257,6 @@ function OrderComparatorClientContent() {
           <Card className="shadow-lg mt-8">
             <CardHeader>
               <CardTitle className="text-2xl">Comparison Report</CardTitle>
-              <CardDescription>
-                Review the comparison summary, general matches, discrepancies, and product line item details.
-              </CardDescription>
             </CardHeader>
             <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col space-y-6">
               {isLoading && (
@@ -279,7 +278,7 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Ready for Comparison</p>
-                  <p className="text-sm">Ensure a Sales Order identifier is available and upload a Purchase Order file.</p>
+                  <p className="text-sm">Ensure a Sales Order is available and upload a Purchase Order file.</p>
                   <p className="text-sm">Comparison will start automatically.</p>
                 </div>
               )}
@@ -296,7 +295,7 @@ function OrderComparatorClientContent() {
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFile.name}</span> selected.</p>
-                  <p className="text-sm mt-2">Waiting for Sales Order identifier to begin analysis.</p>
+                  <p className="text-sm mt-2">Waiting for Sales Order to begin analysis.</p>
                 </div>
               )}
                {!isLoading && !error && !comparisonResult && salesOrderName && purchaseOrderFile &&
@@ -485,7 +484,7 @@ function OrderComparatorClientContent() {
             )}
           </Card>
         <footer className="mt-12 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} EOXS AI comparator. Powered by AI.</p>
+          <p>&copy; {new Date().getFullYear()} Contract Review AI. Powered by AI.</p>
         </footer>
       </div>
     </TooltipProvider>
