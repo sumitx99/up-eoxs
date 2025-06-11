@@ -162,23 +162,29 @@ function OrderComparatorClientContent() {
 
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
-    const statusText = item.status.replace(/_/g, ' ').toLowerCase();
-    const tooltipContent = (
-      <>
-        <p className="font-semibold capitalize">{statusText}:</p>
-        <p className="text-sm whitespace-pre-line">{item.comparisonNotes || 'No specific notes.'}</p>
-      </>
-    );
+    let statusText = item.status.replace(/_/g, ' ').toLowerCase();
+    let iconColor = 'text-red-600';
 
     switch (item.status) {
       case 'MATCHED':
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
         icon = <CheckCircle className="h-5 w-5 text-green-600" />;
+        iconColor = 'text-green-600';
+        if (item.status === 'PARTIAL_MATCH_DETAILS_DIFFER') {
+            statusText = 'partial match, details differ';
+        }
         break;
       default:
         icon = <XCircle className="h-5 w-5 text-red-600" />;
         break;
     }
+
+    const tooltipContent = (
+      <>
+        <p className={`font-semibold capitalize ${iconColor}`}>{statusText}:</p>
+        <p className="text-sm whitespace-pre-line">{item.comparisonNotes || 'No specific notes.'}</p>
+      </>
+    );
     return { icon, tooltipContent };
   };
 
@@ -314,7 +320,7 @@ function OrderComparatorClientContent() {
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
                                   <TableHead className="font-semibold w-[5%] text-center">Status</TableHead>
-                                  <TableHead className="font-semibold w-[45%]">Field</TableHead>
+                                  <TableHead className="font-semibold w-[45%]">Details</TableHead>
                                   <TableHead className="font-semibold w-[50%]">Matched Value</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -354,7 +360,7 @@ function OrderComparatorClientContent() {
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
                                   <TableHead className="font-semibold w-[10%] text-center">Reasons</TableHead>
-                                  <TableHead className="font-semibold w-[30%]">Field</TableHead>
+                                  <TableHead className="font-semibold w-[30%]">Buyer's Info</TableHead>
                                   <TableHead className="font-semibold w-[30%]">PO Value</TableHead>
                                   <TableHead className="font-semibold w-[30%]">SO Value</TableHead>
                                 </TableRow>
@@ -365,10 +371,10 @@ function OrderComparatorClientContent() {
                                     <TableCell className="text-center py-2 px-3 text-sm whitespace-pre-line">
                                       <Tooltip delayDuration={100}>
                                         <TooltipTrigger asChild>
-                                          <XCircle className="h-5 w-5 text-red-600 inline-block cursor-help" />
+                                            <XCircle className="h-5 w-5 text-red-600 inline-block cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
-                                          <p className="font-semibold">Discrepancy Reason:</p>
+                                          <p className="font-semibold text-red-600">Discrepancy Reason:</p>
                                           <p className="text-sm whitespace-pre-line">{d.reason || 'No specific reason provided.'}</p>
                                         </TooltipContent>
                                       </Tooltip>
@@ -479,6 +485,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
