@@ -275,7 +275,7 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-xl">Ready for Comparison</p>
-                  <p className="text-base">Comparison will being shortly after You upload the Purchase Order.</p>
+                  <p className="text-base">Comparison will begin shortly right after You upload the Purchase Order.</p>
                 </div>
               )}
 
@@ -305,42 +305,64 @@ function OrderComparatorClientContent() {
 
               {!isLoading && !error && comparisonResult && (
                 <>
-                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "item-comparison", "matched-info"]}>
-                    <AccordionItem value="matched-info">
+                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "item-comparison"]}>
+                    <AccordionItem value="item-comparison">
                       <AccordionTrigger className="text-2xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                           Matched Info ({comparisonResult.matchedItems?.length || 0})
+                          Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
-                        {(comparisonResult.matchedItems && comparisonResult.matchedItems.length > 0) ? (
-                          <div className="border rounded-md overflow-hidden max-h-[200px] overflow-y-auto">
+                        {(comparisonResult.productLineItemComparisons && comparisonResult.productLineItemComparisons.length > 0) ? (
+                          <div className="border rounded-md overflow-hidden max-h-[400px] overflow-y-auto">
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold w-[5%] text-center">Status</TableHead>
-                                  <TableHead className="font-semibold w-[45%]">Details</TableHead>
-                                  <TableHead className="font-semibold w-[50%]">Matched Value</TableHead>
+                                  <TableHead className="font-semibold text-base w-[10%] text-center">Status</TableHead>
+                                  <TableHead className="font-semibold text-base w-[15%]">PO Product</TableHead>
+                                  <TableHead className="font-semibold text-base w-[6%] text-center">PO Qty</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">PO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">PO Total</TableHead>
+                                  <TableHead className="font-semibold text-base w-[15%]">SO Product</TableHead>
+                                  <TableHead className="font-semibold text-base w-[6%] text-center">SO Qty</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">SO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">SO Total</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {comparisonResult.matchedItems.map((item, index) => (
-                                  <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
-                                    <TableCell className="text-center py-2 px-3 text-base">
-                                      <CheckCircle className="h-5 w-5 text-green-600 inline-block" />
-                                    </TableCell>
-                                    <TableCell className="font-medium py-2 px-3 text-base whitespace-pre-line">{item.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-base whitespace-pre-line">{item.value}</TableCell>
-                                  </TableRow>
-                                ))}
+                                {comparisonResult.productLineItemComparisons.map((item, index) => {
+                                  const { icon, tooltipContent } = getItemStatusIconAndTooltip(item);
+                                  return (
+                                    <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50'}>
+                                      <TableCell className="text-center py-1.5 px-2 text-base">
+                                        <Tooltip delayDuration={100}>
+                                          <TooltipTrigger asChild>
+                                            <span className="inline-block cursor-help">{icon}</span>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
+                                            {tooltipContent}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base whitespace-pre-line">{item.poProductDescription || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base text-center whitespace-pre-line">{item.poQuantity || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base text-right whitespace-pre-line">{item.poUnitPrice || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base text-right whitespace-pre-line">{item.poTotalPrice || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base whitespace-pre-line">{item.soProductDescription || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base text-center whitespace-pre-line">{item.soQuantity || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base text-right whitespace-pre-line">{item.soUnitPrice || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-base text-right whitespace-pre-line">{item.soTotalPrice || 'N/A'}</TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           </div>
                         ) : (
                           <Alert variant="default" className="mt-2 text-base">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-lg">No Matched Info Identified.</AlertTitle>
-                            <AlertDescription>The AI did not find any general fields that match between the Sales Order and Purchase Order(s).</AlertDescription>
+                            <AlertTitle className="text-lg">No Items Compared</AlertTitle>
+                            <AlertDescription>The AI did not identify or compare specific items from the documents.</AlertDescription>
                           </Alert>
                         )}
                       </AccordionContent>
@@ -358,10 +380,10 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold w-[10%] text-center">Reasons</TableHead>
-                                  <TableHead className="font-semibold w-[30%]">Buyer's Info</TableHead>
-                                  <TableHead className="font-semibold w-[30%]">PO</TableHead>
-                                  <TableHead className="font-semibold w-[30%]">SO</TableHead>
+                                  <TableHead className="font-semibold text-base w-[10%] text-center">Reasons</TableHead>
+                                  <TableHead className="font-semibold text-base w-[30%]">Buyer's Info</TableHead>
+                                  <TableHead className="font-semibold text-base w-[30%]">PO</TableHead>
+                                  <TableHead className="font-semibold text-base w-[30%]">SO</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -396,67 +418,6 @@ function OrderComparatorClientContent() {
                       </AccordionContent>
                     </AccordionItem>
 
-                    <AccordionItem value="item-comparison">
-                      <AccordionTrigger className="text-2xl font-semibold text-foreground hover:no-underline">
-                        <div className="flex items-center">
-                          Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        {(comparisonResult.productLineItemComparisons && comparisonResult.productLineItemComparisons.length > 0) ? (
-                          <div className="border rounded-md overflow-hidden max-h-[400px] overflow-y-auto">
-                            <Table>
-                              <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                                <TableRow>
-                                  <TableHead className="font-semibold text-sm w-[10%] text-center">Status</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[15%]">PO Product</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[6%] text-center">PO Qty</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[9%] text-right">PO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[9%] text-right">PO Total</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[15%]">SO Product</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[6%] text-center">SO Qty</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[9%] text-right">SO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-sm w-[9%] text-right">SO Total</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {comparisonResult.productLineItemComparisons.map((item, index) => {
-                                  const { icon, tooltipContent } = getItemStatusIconAndTooltip(item);
-                                  return (
-                                    <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50'}>
-                                      <TableCell className="text-center py-1.5 px-2 text-sm">
-                                        <Tooltip delayDuration={100}>
-                                          <TooltipTrigger asChild>
-                                            <span className="inline-block cursor-help">{icon}</span>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
-                                            {tooltipContent}
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm whitespace-pre-line">{item.poProductDescription || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm text-center whitespace-pre-line">{item.poQuantity || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.poUnitPrice || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.poTotalPrice || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm whitespace-pre-line">{item.soProductDescription || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm text-center whitespace-pre-line">{item.soQuantity || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.soUnitPrice || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.soTotalPrice || 'N/A'}</TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ) : (
-                          <Alert variant="default" className="mt-2 text-base">
-                            <Info className="h-4 w-4" />
-                            <AlertTitle className="text-lg">No Items Compared</AlertTitle>
-                            <AlertDescription>The AI did not identify or compare specific items from the documents.</AlertDescription>
-                          </Alert>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
                   </Accordion>
                 </>
               )}
@@ -484,6 +445,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
