@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, FileKey2, AlertCircle, PackageSearch, Info, MinusCircle, PackagePlus, HelpCircle, UploadCloud, FileText, XCircle } from 'lucide-react';
+import { Loader2, FileWarning, AlertCircle, PackageSearch, Info, MinusCircle, PackagePlus, HelpCircle, UploadCloud, FileText, XCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
@@ -70,7 +70,6 @@ function OrderComparatorClientContent() {
   const handleSubmit = useCallback(async () => {
     const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
     if (!salesOrderNameValid) {
-      // This case should ideally not be reached if auto-submit is based on salesOrderName being present
       setError('Sales Order identifier from URL is required for comparison.');
       toast({ variant: "destructive", title: "Input Missing", description: "Sales Order identifier from URL is required." });
       return;
@@ -196,7 +195,7 @@ function OrderComparatorClientContent() {
                <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
                 <div>
                   <h2 className="text-2xl font-semibold flex items-center">
-                    Order Documents Input
+                    Order Details Entry
                   </h2>
                 </div>
               </AccordionTrigger>
@@ -292,12 +291,19 @@ function OrderComparatorClientContent() {
 
               {!isLoading && !error && comparisonResult && (
                 <>
+                  <CardContent className="p-0 space-y-4"> 
+                    <Alert variant="default" className="text-sm">
+                      <Info className="h-4 w-4" />
+                      <AlertTitle className="text-base">Summary</AlertTitle>
+                      <AlertDescription>{comparisonResult.summary}</AlertDescription>
+                    </Alert>
+                  </CardContent>
+
                   <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "item-comparison"]}>
                     <AccordionItem value="matched-info">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                          <FileKey2 className="mr-2 h-6 w-6 text-blue-600" />
-                          Matched Info ({comparisonResult.matchedItems?.length || 0})
+                           Matched Info ({comparisonResult.matchedItems?.length || 0})
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
@@ -306,19 +312,19 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
+                                  <TableHead className="font-semibold w-[5%] text-center">Status</TableHead>
                                   <TableHead className="font-semibold w-[45%]">Field</TableHead>
-                                  <TableHead className="font-semibold w-[35%]">Matched Value</TableHead>
-                                  <TableHead className="font-semibold w-[20%] text-center">Quality</TableHead>
+                                  <TableHead className="font-semibold w-[50%]">Matched Value</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.matchedItems.map((item, index) => (
                                   <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
-                                    <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{item.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{item.value}</TableCell>
-                                    <TableCell className="text-center py-2 px-3 text-sm whitespace-pre-line">
+                                    <TableCell className="text-center py-2 px-3 text-sm">
                                       <span>✅</span>
                                     </TableCell>
+                                    <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{item.field}</TableCell>
+                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{item.value}</TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
