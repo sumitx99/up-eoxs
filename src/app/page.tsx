@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, Info, PackageSearch, UploadCloud, FileText, XCircle, CheckCircle } from 'lucide-react';
+import { Loader2, FileWarning, Info, UploadCloud, FileText, XCircle, CheckCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
@@ -59,8 +59,8 @@ function OrderComparatorClientContent() {
   const handlePOFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       setPurchaseOrderFile(event.target.files[0]);
-      setComparisonResult(null); 
-      setError(null); 
+      setComparisonResult(null);
+      setError(null);
       setPoFileSelectedText("Uploaded Document");
     } else {
       setPurchaseOrderFile(null);
@@ -70,31 +70,31 @@ function OrderComparatorClientContent() {
 
   const removePOFile = () => {
     setPurchaseOrderFile(null);
-    setCurrentProcessedPOFileSignature(null); 
+    setCurrentProcessedPOFileSignature(null);
     setPoFileSelectedText("Upload a Document");
     if (fileInputRef.current) {
-        fileInputRef.current.value = ''; 
+        fileInputRef.current.value = '';
     }
   };
 
   const handleSubmit = useCallback(async () => {
     const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
-    if (!salesOrderNameValid || !purchaseOrderFile) { 
+    if (!salesOrderNameValid || !purchaseOrderFile) {
       return;
     }
-    
+
     const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
 
-    if (salesOrderName === currentProcessedSOName && 
+    if (salesOrderName === currentProcessedSOName &&
         poFileSignature === currentProcessedPOFileSignature &&
         (comparisonResult || error)
-        ) { 
-      return; 
+        ) {
+      return;
     }
 
     setIsLoading(true);
     setError(null);
-    setComparisonResult(null); 
+    setComparisonResult(null);
 
     const formData = new FormData();
     formData.append('salesOrderName', salesOrderName);
@@ -102,14 +102,14 @@ function OrderComparatorClientContent() {
 
     try {
       const resultState = await compareOrdersAction(initialActionState, formData);
-      
+
       if (resultState.error) {
         setError(resultState.error);
         toast({
           variant: "destructive",
           title: "Comparison Failed",
           description: resultState.error,
-          duration: 9000, 
+          duration: 9000,
         });
       }
       if (resultState.data) {
@@ -120,7 +120,7 @@ function OrderComparatorClientContent() {
         });
       }
       setCurrentProcessedSOName(salesOrderName);
-      setCurrentProcessedPOFileSignature(poFileSignature); 
+      setCurrentProcessedPOFileSignature(poFileSignature);
     } catch (e: any) {
       const errorMessage = e.message || "An unexpected error occurred during comparison.";
       setError(errorMessage);
@@ -130,13 +130,13 @@ function OrderComparatorClientContent() {
           description: errorMessage,
           duration: 9000,
       });
-      setCurrentProcessedSOName(salesOrderName); 
+      setCurrentProcessedSOName(salesOrderName);
       setCurrentProcessedPOFileSignature(poFileSignature);
     } finally {
       setIsLoading(false);
     }
-  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]); 
-  
+  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]);
+
   useEffect(() => {
     const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
     if (salesOrderNameValid && purchaseOrderFile) {
@@ -144,7 +144,7 @@ function OrderComparatorClientContent() {
       const alreadyProcessedThisCombination = (
         salesOrderName === currentProcessedSOName &&
         poFileSignature === currentProcessedPOFileSignature &&
-        (comparisonResult || error) 
+        (comparisonResult || error)
       );
 
       if (!isLoading && !alreadyProcessedThisCombination) {
@@ -155,14 +155,13 @@ function OrderComparatorClientContent() {
 
   const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
   const poFileSignatureForCheck = purchaseOrderFile ? purchaseOrderFile.name + purchaseOrderFile.size : null;
-  const alreadyProcessedThisCombination = 
+  const alreadyProcessedThisCombination =
     salesOrderName === currentProcessedSOName &&
     poFileSignatureForCheck === currentProcessedPOFileSignature &&
     (comparisonResult || error);
 
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
-    let iconColorClass = '';
     const statusText = item.status.replace(/_/g, ' ').toLowerCase();
     const tooltipContent = (
       <>
@@ -265,7 +264,7 @@ function OrderComparatorClientContent() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              
+
               {!isLoading && !error && !comparisonResult && !salesOrderNameValid && !purchaseOrderFile && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
@@ -395,7 +394,6 @@ function OrderComparatorClientContent() {
                     <AccordionItem value="item-comparison">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
-                          <PackageSearch className="mr-2 h-6 w-6 text-purple-600" />
                           Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
                         </div>
                       </AccordionTrigger>
@@ -464,9 +462,6 @@ function OrderComparatorClientContent() {
               </CardFooter>
             )}
           </Card>
-        <footer className="mt-12 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Contract Review AI. Powered by AI.</p>
-        </footer>
       </div>
     </TooltipProvider>
   );
@@ -484,6 +479,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
