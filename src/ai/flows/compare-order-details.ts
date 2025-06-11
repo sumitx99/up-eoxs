@@ -32,7 +32,6 @@ const InternalPromptInputSchema = z.object({
   hasPurchaseOrders: z.boolean(),
   totalPurchaseOrderCount: z.number(),
   additionalPurchaseOrderUris: z.array(z.string()),
-  // New booleans and count for simplified template logic
   isSinglePO: z.boolean(),
   hasAdditionalPOs: z.boolean(),
   additionalPOCount: z.number(),
@@ -70,7 +69,6 @@ const ProductLineItemComparisonSchema = z.object({
 });
 export type ProductLineItemComparison = z.infer<typeof ProductLineItemComparisonSchema>;
 
-// Strict schema for the flow's final output and the exported type
 const StrictCompareOrderDetailsOutputSchema = z.object({
   discrepancies: z.array(DiscrepancySchema).describe('An array of general discrepancies found (e.g., for header fields, overall totals, terms, or unmatched products). This should always be an array, even if empty.'),
   matchedItems: z.array(MatchedItemSchema).describe('An array of general items/fields that match (e.g., for header fields). This should always be an array, even if empty. Strive to find matches for common header fields.'),
@@ -79,7 +77,6 @@ const StrictCompareOrderDetailsOutputSchema = z.object({
 });
 export type CompareOrderDetailsOutput = z.infer<typeof StrictCompareOrderDetailsOutputSchema>;
 
-// Permissive schema for the AI's direct output, allowing optional top-level array fields
 const AiPermissiveOutputSchema = z.object({
   discrepancies: z.array(DiscrepancySchema).optional().describe('An array of general discrepancies found (e.g., for header fields, overall totals, terms, or unmatched products).'),
   matchedItems: z.array(MatchedItemSchema).optional().describe('An array of general items/fields that match (e.g., for header fields). Strive to find matches for common header fields.'),
@@ -95,10 +92,10 @@ export async function compareOrderDetails(input: CompareOrderDetailsInput): Prom
 const compareOrderDetailsPrompt = ai.definePrompt({
   name: 'compareOrderDetailsPrompt',
   input: {
-    schema: InternalPromptInputSchema, // Use the new internal schema
+    schema: InternalPromptInputSchema, 
   },
   output: {
-    schema: AiPermissiveOutputSchema, // Use permissive schema for AI output
+    schema: AiPermissiveOutputSchema, 
   },
   prompt: `You are an AI assistant specializing in comparing sales orders (SOs) with associated purchase orders (POs) provided as various document types.
 Your task is to meticulously analyze the **entire content** of all provided documents, from start to finish, including all pages, headers, footers, and line items.
@@ -134,13 +131,13 @@ Purchase Order Document(s):
         {{/each}}
       {{/if}}
     {{/if}}
-  {{else}} {{! This 'else' is for the inner '#if firstPurchaseOrderPdfDataUri' }}
-    {{! This case means hasPurchaseOrders was true, but firstPurchaseOrderPdfDataUri was not valid (e.g. empty string from a bad fetch, or other issue) }}
+  {{else}} 
     A Purchase Order document was expected (count: {{totalPurchaseOrderCount}}), but the primary PO document could not be processed or was empty. Please verify the linked Purchase Order documents in the ERP.
     The Sales Order will be analyzed as if no valid Purchase Order was available. For any fields or items that would normally come from a Purchase Order, indicate "N/A - PO Not Processed" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Note the absence of a usable PO in your summary.
   {{/if}}
 {{else}}
-  No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. Note the absence of a PO in your summary.
+  No Purchase Order document was provided for comparison. Proceed with analyzing the Sales Order. For any fields or items that would normally come from a Purchase Order, indicate "N/A - No PO Provided" or similar. All Sales Order line items should be treated as 'SO_ONLY'. 
+  Your summary should state: "Sales Order processed. No Purchase Order was provided for comparison; all SO items are listed as SO_ONLY."
 {{/if}}
 
 Based on your analysis of the document contents, provide the following in a valid JSON format:
@@ -192,7 +189,7 @@ Based on your analysis of the document contents, provide the following in a vali
    - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document (or only in SO and no PO provided/processed), this array should reflect that (e.g., list SO items as SO_ONLY, or be empty if SO is also empty).
 
 **3. Summary ('summary' field):**
-   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched with first PO, 1 had quantity mismatch, 1 PO item not in SO"). If no PO was provided, state this clearly (e.g., "Sales Order processed. No Purchase Order was provided for comparison; all SO items are listed as SO_ONLY."). If a PO was expected but could not be processed, note this (e.g., "Sales Order processed. A Purchase Order was expected but could not be processed; comparison proceeded with SO only."). If any limitations were encountered processing the entirety of any document, you MUST explicitly state this limitation in your summary.
+   Provide a concise 'summary' of the overall comparison. This summary should highlight the most significant discrepancies from general fields (both document-level and unmatched products), key confirmed matches, and a brief overview of the product line item comparison findings (e.g., "3 product lines matched with first PO, 1 had quantity mismatch, 1 PO item not in SO"). If no PO was provided, use the exact phrase: "Sales Order processed. No Purchase Order was provided for comparison; all SO items are listed as SO_ONLY." If a PO was expected but could not be processed, note this (e.g., "Sales Order processed. A Purchase Order was expected but could not be processed; comparison proceeded with SO only."). If any limitations were encountered processing the entirety of any document, you MUST explicitly state this limitation in your summary.
 
 **Important Output Structure:**
 - The 'discrepancies' array should always be present as a key in the root JSON object. If no general discrepancies are found, its value should be an empty array (\`[]\`).
@@ -223,23 +220,41 @@ Ensure all fields in the output schema are populated according to your findings.
   }
 });
 
+const isValidDataUri = (uri: string): boolean => {
+  // Basic check: starts with 'data:', contains ';base64,', and has some content after base64,
+  // This check is for any MIME type.
+  return typeof uri === 'string' && uri.startsWith('data:') && uri.includes(';base64,') && uri.split(';base64,')[1]?.length > 0;
+};
+
 const compareOrderDetailsFlow = ai.defineFlow(
   {
     name: 'compareOrderDetailsFlow',
-    inputSchema: CompareOrderDetailsInputSchema, // External input remains the same
-    outputSchema: StrictCompareOrderDetailsOutputSchema, // Flow returns the strict schema
+    inputSchema: CompareOrderDetailsInputSchema,
+    outputSchema: StrictCompareOrderDetailsOutputSchema,
   },
   async (input): Promise<CompareOrderDetailsOutput> => {
     try {
-      const poUris = input.purchaseOrderPdfDataUris || [];
-      const additionalPOs = poUris.slice(1);
+      if (!isValidDataUri(input.salesOrderPdfDataUri)) {
+        console.error('CompareOrderDetailsFlow: Invalid Sales Order data URI provided.');
+        throw new Error('The Sales Order document is missing or invalid. Please ensure it is correctly processed and provided as a valid data URI.');
+      }
+
+      const validPoUris = (input.purchaseOrderPdfDataUris || []).filter(uri => {
+        const isValid = isValidDataUri(uri);
+        if (!isValid && typeof uri === 'string' && uri.length > 0) { // Log if it's a non-empty string but not a valid data URI
+          console.warn(`CompareOrderDetailsFlow: Filtering out invalid or empty Purchase Order data URI: "${uri.substring(0,50)}..."`);
+        }
+        return isValid;
+      });
+      
+      const additionalPOs = validPoUris.slice(1);
       const internalPromptInput: InternalPromptInput = {
         salesOrderPdfDataUri: input.salesOrderPdfDataUri,
-        hasPurchaseOrders: poUris.length > 0,
-        firstPurchaseOrderPdfDataUri: poUris.length > 0 ? poUris[0] : undefined,
-        totalPurchaseOrderCount: poUris.length,
+        hasPurchaseOrders: validPoUris.length > 0,
+        firstPurchaseOrderPdfDataUri: validPoUris.length > 0 ? validPoUris[0] : undefined,
+        totalPurchaseOrderCount: validPoUris.length,
         additionalPurchaseOrderUris: additionalPOs,
-        isSinglePO: poUris.length === 1,
+        isSinglePO: validPoUris.length === 1,
         hasAdditionalPOs: additionalPOs.length > 0,
         additionalPOCount: additionalPOs.length,
       };
@@ -248,7 +263,7 @@ const compareOrderDetailsFlow = ai.defineFlow(
 
       if (!aiPermissiveOutput) {
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output payload.');
-        throw new Error('AI model failed to return valid comparison data. Please check the documents or try again.');
+        throw new Error('AI model failed to return valid comparison data. This might be due to an issue with the AI service or unprocessable document content.');
       }
       
       const finalOutput: CompareOrderDetailsOutput = {
@@ -261,13 +276,26 @@ const compareOrderDetailsFlow = ai.defineFlow(
       return finalOutput;
     } catch (error: unknown) { 
       console.error("Error in compareOrderDetailsFlow: ", error);
+      let errorMessage = "An unexpected error occurred in the AI flow.";
       if (error instanceof Error) {
-        if (error.message.includes("is not found for API version") || error.message.includes("API key not valid") || error.message.includes("Permission denied")) {
-            throw new Error(`AI Model/API Key Error: ${error.message}. Please check model availability and API key permissions.`);
-        }
-        throw error;
+          errorMessage = error.message;
+          if (errorMessage.includes("Converting circular structure to JSON")) {
+              errorMessage = "An internal error occurred while processing the AI request. The AI service may have encountered an issue with the data structure. Please try again or check the document contents.";
+          } else if (errorMessage.toLowerCase().includes("must supply a `contenttype`")) {
+               errorMessage = "An error occurred with document processing for the AI: A document was provided without a recognized type. Please ensure all uploaded files are valid and have standard file extensions (e.g., .pdf, .png, .jpg, .csv).";
+          } else if (errorMessage.toLowerCase().includes("request payload size exceeds the limit") || errorMessage.toLowerCase().includes("payload is too large")) {
+              errorMessage = "One or more documents are too large for the AI to process. Please try with smaller files or fewer documents.";
+          } else if (errorMessage.toLowerCase().includes("deadline exceeded") || errorMessage.toLowerCase().includes("timeout")) {
+              errorMessage = "The AI service timed out while processing the documents. This may be due to complex documents or a temporary service issue. Please try again later.";
+          } else if (errorMessage.includes("is not found for API version") || errorMessage.includes("API key not valid") || errorMessage.includes("Permission denied")) {
+            errorMessage = `AI Model/API Key Error: ${errorMessage}. Please check model availability and API key permissions.`;
+          }
+      } else {
+        errorMessage = String(error);
       }
-      throw new Error(String(error));
+      // Throw a new error with the potentially more user-friendly message
+      throw new Error(`An error occurred in the AI flow: ${errorMessage}`);
     }
   }
 );
+

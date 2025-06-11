@@ -15,7 +15,6 @@ interface FetchedPdfDetails {
   size: number;
 }
 
-// New interface for the return type of fetchSalesOrderPdfFromOdoo
 interface FetchedSalesOrderPdfDetails extends FetchedPdfDetails {
   saleOrderId: number;
 }
@@ -31,7 +30,7 @@ async function fetchSalesOrderPdfFromOdoo(
   odooDb: string,
   odooUsername: string,
   odooPassword: string
-): Promise<FetchedSalesOrderPdfDetails> { // Updated return type
+): Promise<FetchedSalesOrderPdfDetails> {
   console.log(`SERVER_ACTION: Attempting to fetch Sales Order PDF for user input: ${soUserInputName}`);
   const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
   
@@ -67,7 +66,7 @@ async function fetchSalesOrderPdfFromOdoo(
     throw new Error(`Sales Order '${soUserInputName}' not found in Odoo.`);
   }
   const saleOrder = sales[0];
-  const saleId = saleOrder.id as number; // Ensure saleId is treated as number
+  const saleId = saleOrder.id as number;
   const actualSaleOrderName = saleOrder.name;
   console.log(`SERVER_ACTION: Found Sales Order: ${actualSaleOrderName} (ID: ${saleId})`);
 
@@ -117,7 +116,7 @@ async function fetchSalesOrderPdfFromOdoo(
     fileName: `${actualSaleOrderName}.pdf`.replace(/[\/\s]+/g, '_'),
     originalName: actualSaleOrderName,
     size: pdfBuffer.length,
-    saleOrderId: saleId, // Include saleOrderId in the return
+    saleOrderId: saleId,
   };
 }
 
@@ -127,6 +126,7 @@ export async function compareOrdersAction(
 ): Promise<CompareActionState> {
   console.log("SERVER_ACTION: compareOrdersAction invoked.");
   const salesOrderUserInputName = formData.get('salesOrderName') as string | null;
+  const purchaseOrderFileObjects = formData.getAll('purchaseOrderFiles') as File[];
 
   if (!salesOrderUserInputName || salesOrderUserInputName.trim() === '') {
     return { error: 'Sales Order name/sequence is required.' };
@@ -143,7 +143,7 @@ export async function compareOrdersAction(
   }
 
   try {
-    // 1) Fetch Sales Order PDF and its ID
+    // 1) Fetch Sales Order PDF
     const salesOrderDetails = await fetchSalesOrderPdfFromOdoo(
       salesOrderUserInputName.trim(),
       odooUrl,
@@ -155,37 +155,43 @@ export async function compareOrdersAction(
       `SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.originalName} (ID: ${salesOrderDetails.saleOrderId}, Size: ${salesOrderDetails.size} bytes)`
     );
 
-    // ────────────────────────────────────────────────────────────────
-    // 2) FETCH PURCHASE ORDER PDFs ATTACHED to this Sale Order
-    // ────────────────────────────────────────────────────────────────
-    const purchaseOrderDetails: FetchedPdfDetails[] = 
-      await fetchPurchaseOrderPdfsFromOdoo(
-        salesOrderDetails.saleOrderId, // Pass SO ID
-        odooUrl,
-        odooDb,
-        odooUsername,
-        odooPassword
-      );
-
-    // Log each PO result
-    purchaseOrderDetails.forEach((po) => {
-      console.log(
-        `SERVER_ACTION: Successfully fetched PO PDF (attached to SO): ${po.originalName} (size: ${po.size} bytes)`
-      );
-    });
+    // 2) Process manually uploaded Purchase Order files
+    const purchaseOrderDataUris: string[] = [];
+    if (purchaseOrderFileObjects && purchaseOrderFileObjects.length > 0) {
+      console.log(`SERVER_ACTION: Processing ${purchaseOrderFileObjects.length} manually uploaded Purchase Order files.`);
+      for (const file of purchaseOrderFileObjects) {
+        if (file.size === 0) {
+            console.warn(`SERVER_ACTION: Skipping empty uploaded file: ${file.name}`);
+            continue;
+        }
+        try {
+            const buffer = await file.arrayBuffer();
+            const base64String = Buffer.from(buffer).toString('base64');
+            const dataUri = `data:${file.type || 'application/octet-stream'};base64,${base64String}`;
+            purchaseOrderDataUris.push(dataUri);
+            console.log(`SERVER_ACTION: Converted uploaded PO file ${file.name} (Type: ${file.type}, Size: ${file.size} bytes) to data URI.`);
+        } catch (fileReadError: any) {
+            console.error(`SERVER_ACTION: Error reading or converting uploaded file ${file.name}: ${fileReadError.message}`);
+            // Optionally, decide if one bad file should stop the whole process or just be skipped
+            // For now, let's skip and continue, but one could throw new Error here.
+            // If throwing, ensure the main catch block handles it gracefully.
+             return { error: `Failed to read uploaded Purchase Order file: ${file.name}. Error: ${fileReadError.message}` };
+        }
+      }
+    } else {
+      console.log("SERVER_ACTION: No Purchase Order files were uploaded by the user.");
+    }
     
-    // 3) Now pass SO data URI and array of PO data URIs into compareOrderDetails()
-    const poDataUris = purchaseOrderDetails.map(po => po.dataUri);
-    
+    // 3) Call AI to compare
     const comparisonResult = await compareOrderDetails({
       salesOrderPdfDataUri: salesOrderDetails.dataUri,
-      purchaseOrderPdfDataUris: poDataUris,
+      purchaseOrderPdfDataUris: purchaseOrderDataUris, // Use data URIs from uploaded files
     });
 
     return { data: comparisonResult };
 
   } catch (e: unknown) {
-    let clientFacingMessage = "An unexpected error occurred on the server while fetching or processing the Sales Order.";
+    let clientFacingMessage = "An unexpected error occurred on the server while fetching or processing the order documents.";
     let logMessage = "SERVER_ACTION_CRITICAL_ERROR processing order:";
 
     if (e instanceof Error) {
@@ -227,125 +233,4 @@ export async function compareOrdersAction(
   }
 }
 
-/**
- *  fetchPurchaseOrderPdfsFromOdoo
- *
- *  Finds PDF attachments directly linked to the given Sales Order ID,
- *  filters them by name to identify potential Purchase Order documents,
- *  and returns their details.
- */
-async function fetchPurchaseOrderPdfsFromOdoo(
-  saleOrderId: number, // Changed from soUserInputName
-  odooUrl: string,
-  odooDb: string,
-  odooUsername: string,
-  odooPassword: string
-): Promise<FetchedPdfDetails[]> {
-  console.log(
-    `SERVER_ACTION: Attempting to fetch PO PDFs attached directly to Sales Order ID: ${saleOrderId}`
-  );
-  
-  const commonClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/common`);
-  let uid: number;
-  try {
-    uid = await new Promise((resolve, reject) => {
-      commonClient.methodCall(
-        "authenticate",
-        [odooDb, odooUsername, odooPassword, {}],
-        (err, value) => {
-          if (err) {
-            return reject(
-              new Error(`Odoo authentication failed (fetching PO attachments for SO): ${err.message}`)
-            );
-          }
-          if (!value || typeof value !== "number" || value <= 0) {
-            return reject(
-              new Error("Odoo returned invalid UID while authenticating (fetching PO attachments for SO).")
-            );
-          }
-          resolve(value as number);
-        }
-      );
-    });
-  } catch (authErr) {
-    console.error("SERVER_ACTION: Auth Error in fetchPurchaseOrderPdfsFromOdoo:", authErr);
-    throw authErr;
-  }
-
-  const objectClient = xmlrpc.createSecureClient(`${odooUrl}/xmlrpc/2/object`);
-
-  // Search ir.attachment for PDFs linked to the Sales Order, filtered by name for POs
-  const attSearchDomain = [
-    ["res_model", "=", "sale.order"],
-    ["res_id", "=", saleOrderId],
-    ["mimetype", "=", "application/pdf"],
-    ["name", "ilike", "Purchase%Order%"]
-  ];
-
-  let attachments: Array<{ id: number; name: string; datas: string; file_size: number }>;
-  try {
-    attachments = await new Promise((resolve, reject) => {
-      objectClient.methodCall(
-        "execute_kw",
-        [
-          odooDb,
-          uid,
-          odooPassword,
-          "ir.attachment",
-          "search_read",
-          [attSearchDomain],
-          { fields: ["id", "name", "datas", "file_size"], limit: 10 }, // Fetch file_size
-        ],
-        (err, value) => {
-          if (err) {
-            return reject(
-              new Error(`Odoo IR.Attachment search (for POs on SO) failed: ${err.message}`)
-            );
-          }
-          resolve(value as Array<{ id: number; name: string; datas: string; file_size: number }>);
-        }
-      );
-    });
-  } catch (searchErr) {
-    console.error("SERVER_ACTION: Error searching attachments on SO for POs:", searchErr);
-    throw searchErr;
-  }
-
-  if (!attachments || attachments.length === 0) {
-    console.warn(
-      `SERVER_ACTION: No PDF attachments matching PO-related keywords found directly on Sales Order ID '${saleOrderId}'.`
-    );
-    return [];
-  }
-
-  const results: FetchedPdfDetails[] = [];
-  for (const att of attachments) {
-    if (!att.datas) {
-      console.warn(`SERVER_ACTION: Attachment '${att.name}' (id=${att.id}) for SO ID ${saleOrderId} has no 'datas'. Skipping.`);
-      continue;
-    }
-    // Odoo's file_size is authoritative. 'datas' can sometimes be just a checksum if stored externally.
-    // However, for direct PDF generation, 'datas' being non-empty is key.
-    // If att.file_size is 0 but datas exists, it's odd. If datas is missing, file_size might still be there.
-    // We rely on 'datas' for the data URI.
-
-    const binary = Buffer.from(att.datas, "base64");
-    if (binary.byteLength === 0) {
-        console.warn(`SERVER_ACTION: Decoded PDF data for attachment '${att.name}' (id=${att.id}) on SO ID ${saleOrderId} is empty (0 bytes). Actual file_size from Odoo: ${att.file_size}. Skipping.`);
-        continue;
-    }
-
-    const dataUri = `data:application/pdf;base64,${att.datas}`;
-    results.push({
-      dataUri,
-      fileName: `${att.name.replace(/[\s/]/g, "_")}`, // Use actual attachment name for file
-      originalName: att.name,
-      size: binary.byteLength, // Size of the base64 decoded data
-    });
-  }
-
-  if (results.length === 0) {
-      console.warn(`SERVER_ACTION: After filtering, no valid PO PDF attachments found for SO ID ${saleOrderId}. Attachments considered: ${attachments.length}`);
-  }
-  return results;
-}
+// Removed fetchPurchaseOrderPdfsFromOdoo function as POs are now manually uploaded.
