@@ -162,25 +162,26 @@ function OrderComparatorClientContent() {
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
     let statusText = item.status.replace(/_/g, ' ').toLowerCase();
-    let iconColor = 'text-red-600 dark:text-red-400';
+    let iconColorClass = 'text-red-600 dark:text-red-400'; // Default to red
 
     switch (item.status) {
       case 'MATCHED':
+        icon = <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />;
+        iconColorClass = 'text-green-600 dark:text-green-400';
+        break;
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
         icon = <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />;
-        iconColor = 'text-green-600 dark:text-green-400';
-        if (item.status === 'PARTIAL_MATCH_DETAILS_DIFFER') {
-            statusText = 'partial match, details differ';
-        }
+        iconColorClass = 'text-green-600 dark:text-green-400';
+        statusText = 'partial match, details differ';
         break;
-      default:
+      default: // Covers MISMATCH_*, PO_ONLY, SO_ONLY
         icon = <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
         break;
     }
 
     const tooltipContent = (
       <>
-        <p className={`font-semibold capitalize ${iconColor}`}>{statusText}:</p>
+        <p className={`font-semibold capitalize ${iconColorClass}`}>{statusText}:</p>
         <p className="text-base whitespace-pre-line">{item.comparisonNotes || 'No specific notes.'}</p>
       </>
     );
@@ -217,7 +218,7 @@ function OrderComparatorClientContent() {
                           type="file"
                           onChange={handlePOFileChange}
                           ref={fileInputRef}
-                          className="block w-full text-base text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-base file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                          className="block w-full text-base text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-0.5 file:text-base file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                           accept=".pdf,.png,.jpg,.jpeg,.csv,.xls,.xlsx"
                         />
                         {poFileSelectedText === "Uploaded Document" ? (
@@ -301,11 +302,9 @@ function OrderComparatorClientContent() {
               {!isLoading && !error && comparisonResult && (
                 <>
                   <Accordion type="multiple" className="w-full" defaultValue={["item-comparison", "discrepancies"]}>
-                     <AccordionItem value="item-comparison">
+                    <AccordionItem value="item-comparison">
                       <AccordionTrigger className="text-2xl font-semibold text-foreground hover:no-underline">
-                        <div className="flex items-center">
-                          Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
-                        </div>
+                        Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         {(comparisonResult.productLineItemComparisons && comparisonResult.productLineItemComparisons.length > 0) ? (
@@ -447,6 +446,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
