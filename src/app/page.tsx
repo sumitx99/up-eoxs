@@ -2,7 +2,7 @@
 // src/app/page.tsx
 'use client';
 
-import React, { useState, useEffect, Suspense, useRef } from 'react';
+import React, { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, Scale, Search, Workflow, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle, UploadCloud, FileText, XCircle } from 'lucide-react';
+import { Loader2, FileWarning, Scale, Search, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle, UploadCloud, FileText, XCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
@@ -25,12 +25,12 @@ const initialActionState: CompareActionState = {
 
 function OrderComparatorClientContent() {
   const [salesOrderName, setSalesOrderName] = useState<string>('');
-  const [purchaseOrderFiles, setPurchaseOrderFiles] = useState<File[]>([]);
+  const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null); // Changed to single file
   const [error, setError] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentProcessedSOName, setCurrentProcessedSOName] = useState<string | null>(null);
-  const [currentProcessedPOFiles, setCurrentProcessedPOFiles] = useState<string[]>([]); // Store names of processed PO files
+  const [currentProcessedPOFileSignature, setCurrentProcessedPOFileSignature] = useState<string | null>(null); // Signature for single PO file
 
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -42,58 +42,65 @@ function OrderComparatorClientContent() {
 
     if (decodedSOName !== salesOrderName) {
       setSalesOrderName(decodedSOName);
-      // Resetting dependent states if SO name changes
       setComparisonResult(null);
       setError(null);
       setCurrentProcessedSOName(null);
-      // Do not reset purchaseOrderFiles here, user might have selected them before SO loaded
-      setIsLoading(false); // Ensure not stuck in loading if SO changes mid-load
+      setIsLoading(false);
     }
   }, [searchParams, salesOrderName]);
 
 
   const handlePOFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files) {
-      setPurchaseOrderFiles(Array.from(event.target.files));
-      setComparisonResult(null); // Reset comparison if PO files change
+    if (event.target.files && event.target.files.length > 0) {
+      setPurchaseOrderFile(event.target.files[0]); // Set the first (and only) file
+      setComparisonResult(null);
       setError(null);
+    } else {
+      setPurchaseOrderFile(null); // Clear if no file selected
     }
   };
 
-  const removePOFile = (fileNameToRemove: string) => {
-    setPurchaseOrderFiles(prevFiles => prevFiles.filter(file => file.name !== fileNameToRemove));
+  const removePOFile = () => {
+    setPurchaseOrderFile(null);
+    setCurrentProcessedPOFileSignature(null);
     if (fileInputRef.current) {
-        fileInputRef.current.value = ''; // Reset file input
+        fileInputRef.current.value = '';
     }
   };
 
-  const handleSubmit = async (event?: React.FormEvent<HTMLFormElement>) => {
-    event?.preventDefault();
-
+  const handleSubmit = useCallback(async () => {
     if (!salesOrderName || salesOrderName.trim() === '') {
-      setError('Sales Order identifier is required.');
+      // This case should ideally be handled by the useEffect trigger condition
+      // but as a safeguard:
+      setError('Sales Order identifier is required for comparison.');
       toast({ variant: "destructive", title: "Input Missing", description: "Sales Order identifier is required." });
       return;
     }
+
+    if (!purchaseOrderFile) {
+      // If auto-submit relies on PO file, this might not be an error,
+      // but a state where comparison isn't ready yet.
+      // For now, let's assume auto-submit means PO is expected.
+      setError('Purchase Order file is required for comparison.');
+      toast({ variant: "destructive", title: "Input Missing", description: "Purchase Order file is required." });
+      return;
+    }
     
-    const poFileNames = purchaseOrderFiles.map(f => f.name + f.size).sort();
+    const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
     if (salesOrderName === currentProcessedSOName && 
-        JSON.stringify(poFileNames) === JSON.stringify(currentProcessedPOFiles) &&
+        poFileSignature === currentProcessedPOFileSignature &&
         comparisonResult) { 
-      toast({ title: "No Changes", description: "The same Sales Order and Purchase Order files are already processed." });
+      toast({ title: "No Changes", description: "The same Sales Order and Purchase Order file are already processed." });
       return; 
     }
 
-
     setIsLoading(true);
     setError(null);
-    setComparisonResult(null); // Clear previous results before new submission
+    setComparisonResult(null);
 
     const formData = new FormData();
     formData.append('salesOrderName', salesOrderName);
-    purchaseOrderFiles.forEach(file => {
-      formData.append('purchaseOrderFiles', file);
-    });
+    formData.append('purchaseOrderFile', purchaseOrderFile); // Append single file
 
     try {
       const resultState = await compareOrdersAction(initialActionState, formData);
@@ -115,7 +122,7 @@ function OrderComparatorClientContent() {
         });
       }
       setCurrentProcessedSOName(salesOrderName);
-      setCurrentProcessedPOFiles(poFileNames); 
+      setCurrentProcessedPOFileSignature(poFileSignature); 
     } catch (e: any) {
       const errorMessage = e.message || "An unexpected error occurred during comparison.";
       setError(errorMessage);
@@ -125,15 +132,29 @@ function OrderComparatorClientContent() {
           description: errorMessage,
           duration: 9000,
       });
-      // Still set current processed info even on catch, to prevent immediate re-runs of failed identical requests
       setCurrentProcessedSOName(salesOrderName); 
-      setCurrentProcessedPOFiles(poFileNames);
+      setCurrentProcessedPOFileSignature(poFileSignature);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, toast]);
   
-  // Removed the useEffect hook that previously auto-triggered handleSubmit
+  useEffect(() => {
+    if (salesOrderName && salesOrderName.trim() !== '' && purchaseOrderFile) {
+      // Only submit if not currently loading and the input combination hasn't been processed or resulted in an error for this exact combo
+      const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
+      const alreadyProcessed = (
+        salesOrderName === currentProcessedSOName &&
+        poFileSignature === currentProcessedPOFileSignature &&
+        (comparisonResult || error) // if there was a result OR an error for this combo, don't re-run
+      );
+
+      if (!isLoading && !alreadyProcessed) {
+         handleSubmit();
+      }
+    }
+  }, [salesOrderName, purchaseOrderFile, isLoading, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, handleSubmit]);
+
 
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
@@ -167,7 +188,7 @@ function OrderComparatorClientContent() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="w-full max-w-6xl mx-auto grid grid-cols-1 gap-8">
+        <div className="w-full max-w-6xl mx-auto grid grid-cols-1 gap-8">
           <Accordion type="single" collapsible className="w-full shadow-lg rounded-lg bg-card" defaultValue="input-documents">
             <AccordionItem value="input-documents" className="border-b-0">
                <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
@@ -177,7 +198,7 @@ function OrderComparatorClientContent() {
                     Order Documents Input
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    Provide the Sales Order identifier and manually upload Purchase Order documents for comparison.
+                    Provide the Sales Order identifier and manually upload a Purchase Order document for comparison.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -197,46 +218,39 @@ function OrderComparatorClientContent() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="purchaseOrderFiles" className="text-base font-medium flex items-center">
-                          <UploadCloud className="mr-2 h-5 w-5" /> Purchase Order Documents (Optional):
+                        <Label htmlFor="purchaseOrderFile" className="text-base font-medium flex items-center">
+                          <UploadCloud className="mr-2 h-5 w-5" /> Purchase Order Document:
                         </Label>
                         <Input
-                          id="purchaseOrderFiles"
-                          name="purchaseOrderFiles"
+                          id="purchaseOrderFile"
+                          name="purchaseOrderFile"
                           type="file"
-                          multiple
                           onChange={handlePOFileChange}
                           ref={fileInputRef}
                           className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                           accept=".pdf,.png,.jpg,.jpeg,.csv,.xls,.xlsx"
                         />
-                        <p className="text-xs text-muted-foreground">Upload PDF, image (PNG, JPG), CSV, or Excel files. Multiple files allowed.</p>
-                        {purchaseOrderFiles.length > 0 && (
+                        <p className="text-xs text-muted-foreground">Upload one PDF, image (PNG, JPG), CSV, or Excel file.</p>
+                        {purchaseOrderFile && (
                           <div className="mt-2 space-y-1">
-                            <p className="text-sm font-medium">Selected PO files:</p>
-                            <ul className="list-disc pl-5 text-sm text-muted-foreground max-h-24 overflow-y-auto">
-                              {purchaseOrderFiles.map(file => (
-                                <li key={file.name + file.lastModified} className="flex items-center justify-between">
-                                  <span className="truncate" title={file.name}>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
-                                  <Button variant="ghost" size="icon" onClick={() => removePOFile(file.name)} className="h-6 w-6 ml-2">
-                                    <XCircle className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </li>
-                              ))}
-                            </ul>
+                            <p className="text-sm font-medium">Selected PO file:</p>
+                            <div className="flex items-center justify-between text-sm text-muted-foreground p-2 border rounded-md">
+                              <span className="truncate" title={purchaseOrderFile.name}>
+                                {purchaseOrderFile.name} ({(purchaseOrderFile.size / 1024).toFixed(1)} KB)
+                              </span>
+                              <Button variant="ghost" size="icon" onClick={removePOFile} className="h-6 w-6 ml-2">
+                                <XCircle className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </div>
-                       <Button type="submit" className="w-full mt-4 py-3 text-lg" disabled={isLoading || !salesOrderName}>
-                        {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Workflow className="mr-2 h-5 w-5" /> }
-                        Compare Orders
-                      </Button>
                     </CardContent>
                 </Card>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        </form>
+        </div>
 
           <Card className="shadow-lg mt-8">
             <CardHeader>
@@ -261,29 +275,40 @@ function OrderComparatorClientContent() {
                 </Alert>
               )}
               
-              {/* Placeholder when no SO is loaded */}
-              {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && (
+              {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && !purchaseOrderFile && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Ready for Comparison</p>
-                  <p className="text-sm">Please ensure a Sales Order identifier is available above.</p>
-                  <p className="text-sm">Upload any Purchase Orders if needed, then click "Compare Orders".</p>
+                  <p className="text-sm">Ensure a Sales Order identifier is available and upload a Purchase Order file.</p>
+                  <p className="text-sm">Comparison will start automatically.</p>
                 </div>
               )}
 
-              {/* Placeholder when SO is loaded, but no comparison run yet */}
-              {!isLoading && !error && !comparisonResult && salesOrderName && salesOrderName.trim() !== '' && (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
+              {!isLoading && !error && !comparisonResult && salesOrderName && salesOrderName.trim() !== '' && !purchaseOrderFile && (
+                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Sales Order: <span className="font-semibold text-primary">{salesOrderName}</span></p>
-                  {purchaseOrderFiles.length > 0 ? (
-                      <p className="text-sm">{purchaseOrderFiles.length} Purchase Order file(s) selected.</p>
-                  ) : (
-                      <p className="text-sm">No Purchase Order files selected.</p>
-                  )}
-                  <p className="text-sm mt-2">Click "Compare Orders" to begin analysis.</p>
+                  <p className="text-sm mt-2">Please upload a Purchase Order file to begin analysis.</p>
                 </div>
               )}
+
+              {!isLoading && !error && !comparisonResult && purchaseOrderFile && (!salesOrderName || salesOrderName.trim() === '') && (
+                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
+                  <FileText className="h-16 w-16 text-gray-400 mb-4" />
+                  <p className="text-lg">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFile.name}</span> selected.</p>
+                  <p className="text-sm mt-2">Waiting for Sales Order identifier to begin analysis.</p>
+                </div>
+              )}
+               {!isLoading && !error && !comparisonResult && salesOrderName && purchaseOrderFile &&
+                (!currentProcessedSOName || !currentProcessedPOFileSignature || (salesOrderName !== currentProcessedSOName || purchaseOrderFile.name + purchaseOrderFile.size !== currentProcessedPOFileSignature) )&& (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                    <p className="text-lg">Preparing to compare...</p>
+                    <p className="text-sm">Sales Order: {salesOrderName}</p>
+                    <p className="text-sm">Purchase Order: {purchaseOrderFile.name}</p>
+                </div>
+              )}
+
 
               {!isLoading && !error && comparisonResult && (
                 <>
@@ -474,6 +499,4 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
-    
-
     

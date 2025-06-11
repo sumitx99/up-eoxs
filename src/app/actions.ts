@@ -126,7 +126,7 @@ export async function compareOrdersAction(
 ): Promise<CompareActionState> {
   console.log("SERVER_ACTION: compareOrdersAction invoked.");
   const salesOrderUserInputName = formData.get('salesOrderName') as string | null;
-  const purchaseOrderFileObjects = formData.getAll('purchaseOrderFiles') as File[];
+  const purchaseOrderFile = formData.get('purchaseOrderFile') as File | null; // Changed to single file
 
   if (!salesOrderUserInputName || salesOrderUserInputName.trim() === '') {
     return { error: 'Sales Order name/sequence is required.' };
@@ -155,37 +155,28 @@ export async function compareOrdersAction(
       `SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.originalName} (ID: ${salesOrderDetails.saleOrderId}, Size: ${salesOrderDetails.size} bytes)`
     );
 
-    // 2) Process manually uploaded Purchase Order files
+    // 2) Process manually uploaded Purchase Order file
     const purchaseOrderDataUris: string[] = [];
-    if (purchaseOrderFileObjects && purchaseOrderFileObjects.length > 0) {
-      console.log(`SERVER_ACTION: Processing ${purchaseOrderFileObjects.length} manually uploaded Purchase Order files.`);
-      for (const file of purchaseOrderFileObjects) {
-        if (file.size === 0) {
-            console.warn(`SERVER_ACTION: Skipping empty uploaded file: ${file.name}`);
-            continue;
-        }
-        try {
-            const buffer = await file.arrayBuffer();
-            const base64String = Buffer.from(buffer).toString('base64');
-            const dataUri = `data:${file.type || 'application/octet-stream'};base64,${base64String}`;
-            purchaseOrderDataUris.push(dataUri);
-            console.log(`SERVER_ACTION: Converted uploaded PO file ${file.name} (Type: ${file.type}, Size: ${file.size} bytes) to data URI.`);
-        } catch (fileReadError: any) {
-            console.error(`SERVER_ACTION: Error reading or converting uploaded file ${file.name}: ${fileReadError.message}`);
-            // Optionally, decide if one bad file should stop the whole process or just be skipped
-            // For now, let's skip and continue, but one could throw new Error here.
-            // If throwing, ensure the main catch block handles it gracefully.
-             return { error: `Failed to read uploaded Purchase Order file: ${file.name}. Error: ${fileReadError.message}` };
-        }
+    if (purchaseOrderFile && purchaseOrderFile.size > 0) {
+      console.log(`SERVER_ACTION: Processing manually uploaded Purchase Order file: ${purchaseOrderFile.name}`);
+      try {
+          const buffer = await purchaseOrderFile.arrayBuffer();
+          const base64String = Buffer.from(buffer).toString('base64');
+          const dataUri = `data:${purchaseOrderFile.type || 'application/octet-stream'};base64,${base64String}`;
+          purchaseOrderDataUris.push(dataUri);
+          console.log(`SERVER_ACTION: Converted uploaded PO file ${purchaseOrderFile.name} (Type: ${purchaseOrderFile.type}, Size: ${purchaseOrderFile.size} bytes) to data URI.`);
+      } catch (fileReadError: any) {
+          console.error(`SERVER_ACTION: Error reading or converting uploaded file ${purchaseOrderFile.name}: ${fileReadError.message}`);
+          return { error: `Failed to read uploaded Purchase Order file: ${purchaseOrderFile.name}. Error: ${fileReadError.message}` };
       }
     } else {
-      console.log("SERVER_ACTION: No Purchase Order files were uploaded by the user.");
+      console.log("SERVER_ACTION: No Purchase Order file was uploaded by the user or file is empty.");
     }
     
     // 3) Call AI to compare
     const comparisonResult = await compareOrderDetails({
       salesOrderPdfDataUri: salesOrderDetails.dataUri,
-      purchaseOrderPdfDataUris: purchaseOrderDataUris, // Use data URIs from uploaded files
+      purchaseOrderPdfDataUris: purchaseOrderDataUris, 
     });
 
     return { data: comparisonResult };
@@ -232,5 +223,3 @@ export async function compareOrdersAction(
     return { error: finalClientMessage };
   }
 }
-
-// Removed fetchPurchaseOrderPdfsFromOdoo function as POs are now manually uploaded.
