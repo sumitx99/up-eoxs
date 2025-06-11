@@ -162,7 +162,7 @@ function OrderComparatorClientContent() {
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
     let statusText = item.status.replace(/_/g, ' ').toLowerCase();
-    let iconColor = 'text-red-600 dark:text-red-400'; 
+    let iconColor = 'text-red-600 dark:text-red-400';
 
     switch (item.status) {
       case 'MATCHED':
@@ -173,7 +173,7 @@ function OrderComparatorClientContent() {
             statusText = 'partial match, details differ';
         }
         break;
-      default: 
+      default:
         icon = <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
         break;
     }
@@ -193,7 +193,7 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <header className="mb-8 text-center pt-4">
           <div className="flex items-center justify-center mb-2">
-            <h1 className="text-5xl font-bold text-foreground">Order Comparator</h1>
+            <h1 className="text-5xl font-bold text-foreground">Contract Review AI</h1>
           </div>
         </header>
 
@@ -447,6 +447,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
