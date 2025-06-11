@@ -68,7 +68,9 @@ function OrderComparatorClientContent() {
   };
 
   const handleSubmit = useCallback(async () => {
-    if (!salesOrderName || salesOrderName.trim() === '') {
+    const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
+    if (!salesOrderNameValid) {
+      // This case should ideally not be reached if auto-submit is based on salesOrderName being present
       setError('Sales Order identifier from URL is required for comparison.');
       toast({ variant: "destructive", title: "Input Missing", description: "Sales Order identifier from URL is required." });
       return;
@@ -136,7 +138,8 @@ function OrderComparatorClientContent() {
   }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]); 
   
   useEffect(() => {
-    if (salesOrderName && salesOrderName.trim() !== '' && purchaseOrderFile) {
+    const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
+    if (salesOrderNameValid && purchaseOrderFile) {
       const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
       const alreadyProcessedThisCombination = (
         salesOrderName === currentProcessedSOName &&
@@ -169,6 +172,14 @@ function OrderComparatorClientContent() {
         return <HelpCircle className="h-5 w-5 text-muted-foreground" />;
     }
   };
+  
+  const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
+  const poFileSignatureForCheck = purchaseOrderFile ? purchaseOrderFile.name + purchaseOrderFile.size : null;
+  const alreadyProcessedThisCombination = 
+    salesOrderName === currentProcessedSOName &&
+    poFileSignatureForCheck === currentProcessedPOFileSignature &&
+    (comparisonResult || error);
+
 
   return (
     <TooltipProvider>
@@ -246,32 +257,31 @@ function OrderComparatorClientContent() {
                 </Alert>
               )}
               
-              {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && !purchaseOrderFile && (
+              {!isLoading && !error && !comparisonResult && !salesOrderNameValid && !purchaseOrderFile && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Ready for Comparison</p>
-                  <p className="text-sm">Ensure a Sales Order is available (via URL) and upload a Purchase Order file.</p>
+                  <p className="text-sm">Ensure a Sales Order is specified in the URL and upload a Purchase Order document.</p>
                   <p className="text-sm">Comparison will start automatically.</p>
                 </div>
               )}
 
-              {!isLoading && !error && !comparisonResult && salesOrderName && salesOrderName.trim() !== '' && !purchaseOrderFile && (
+              {!isLoading && !error && !comparisonResult && salesOrderNameValid && !purchaseOrderFile && (
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Sales Order identifier detected.</p>
-                  <p className="text-sm mt-2">Please upload a Purchase Order file to begin analysis.</p>
+                  <p className="text-lg">System ready.</p>
+                  <p className="text-sm mt-2">Please upload a Purchase Order document to begin analysis.</p>
                 </div>
               )}
 
-              {!isLoading && !error && !comparisonResult && purchaseOrderFile && (!salesOrderName || salesOrderName.trim() === '') && (
+              {!isLoading && !error && !comparisonResult && !salesOrderNameValid && purchaseOrderFile && (
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFile.name}</span> selected.</p>
                   <p className="text-sm mt-2">Waiting for Sales Order identifier (via URL) to begin analysis.</p>
                 </div>
               )}
-               {!isLoading && !error && !comparisonResult && salesOrderName && purchaseOrderFile &&
-                (!currentProcessedSOName || !currentProcessedPOFileSignature || (salesOrderName !== currentProcessedSOName || purchaseOrderFile.name + purchaseOrderFile.size !== currentProcessedPOFileSignature) )&& (
+               {!isLoading && !error && !comparisonResult && salesOrderNameValid && purchaseOrderFile && !alreadyProcessedThisCombination && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                     <p className="text-lg">Preparing to compare...</p>
@@ -460,6 +470,8 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+    
+
     
 
     
