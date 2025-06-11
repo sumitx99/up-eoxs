@@ -45,6 +45,12 @@ function OrderComparatorClientContent() {
       setComparisonResult(null);
       setError(null);
       setCurrentProcessedSOName(null);
+      // When SO name changes, clear PO file and its processed signature too if you want a fresh comparison start
+      setPurchaseOrderFile(null);
+      setCurrentProcessedPOFileSignature(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   }, [searchParams, salesOrderName]);
 
@@ -69,24 +75,19 @@ function OrderComparatorClientContent() {
 
   const handleSubmit = useCallback(async () => {
     const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
-    if (!salesOrderNameValid) {
-      // This case should ideally be handled by UI state, error set if attempted without SO
-      return;
-    }
-
-    if (!purchaseOrderFile) {
-      // This case should ideally be handled by UI state, error set if attempted without PO
+    if (!salesOrderNameValid || !purchaseOrderFile) { // Ensure both are present
+      // Optionally, set an error or toast if trying to submit without necessary inputs
+      // For automatic submission, this check might be redundant if useEffect handles it.
       return;
     }
     
     const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
 
+    // Prevent re-submission if inputs haven't changed and a result/error already exists
     if (salesOrderName === currentProcessedSOName && 
         poFileSignature === currentProcessedPOFileSignature &&
         (comparisonResult || error)
         ) { 
-      // No actual toast here as per removal of "Compare" button and auto-trigger
-      // This check prevents re-processing if state somehow triggers it again with same data.
       return; 
     }
 
@@ -96,7 +97,7 @@ function OrderComparatorClientContent() {
 
     const formData = new FormData();
     formData.append('salesOrderName', salesOrderName);
-    formData.append('purchaseOrderFile', purchaseOrderFile);
+    formData.append('purchaseOrderFile', purchaseOrderFile); // Ensure correct key for single file
 
     try {
       const resultState = await compareOrdersAction(initialActionState, formData);
@@ -128,6 +129,7 @@ function OrderComparatorClientContent() {
           description: errorMessage,
           duration: 9000,
       });
+      // Still set processed names even on failure to prevent immediate re-trigger for same inputs
       setCurrentProcessedSOName(salesOrderName); 
       setCurrentProcessedPOFileSignature(poFileSignature);
     } finally {
@@ -135,6 +137,7 @@ function OrderComparatorClientContent() {
     }
   }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]); 
   
+  // useEffect for automatic submission when both SO and PO are ready and not already processed.
   useEffect(() => {
     const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
     if (salesOrderNameValid && purchaseOrderFile) {
@@ -142,7 +145,7 @@ function OrderComparatorClientContent() {
       const alreadyProcessedThisCombination = (
         salesOrderName === currentProcessedSOName &&
         poFileSignature === currentProcessedPOFileSignature &&
-        (comparisonResult || error) 
+        (comparisonResult || error) // If there's a result or an error, it's been processed
       );
 
       if (!isLoading && !alreadyProcessedThisCombination) {
@@ -155,13 +158,14 @@ function OrderComparatorClientContent() {
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
       case 'MATCHED':
-        return <span>✅</span>;
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'PARTIAL_MATCH_DETAILS_DIFFER': // Changed to green tick
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'MISMATCH_QUANTITY':
       case 'MISMATCH_UNIT_PRICE':
       case 'MISMATCH_TOTAL_PRICE':
       case 'MISMATCH_DESCRIPTION':
-      case 'PARTIAL_MATCH_DETAILS_DIFFER':
-        return <span>❌</span>;
+        return <XCircle className="h-5 w-5 text-red-500" />;
       case 'PO_ONLY':
         return <MinusCircle className="h-5 w-5 text-orange-500" />;
       case 'SO_ONLY':
@@ -296,7 +300,6 @@ function OrderComparatorClientContent() {
 
               {!isLoading && !error && comparisonResult && (
                 <>
-                  {/* AI Summary Removed */}
                   <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "item-comparison"]}>
                     <AccordionItem value="matched-info">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
@@ -352,17 +355,17 @@ function OrderComparatorClientContent() {
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
                                   <TableHead className="font-semibold w-[5%] text-center">Status</TableHead>
-                                  <TableHead className="font-semibold w-[25%]">Field</TableHead>
-                                  <TableHead className="font-semibold w-[27%]">PO Value</TableHead>
-                                  <TableHead className="font-semibold w-[27%]">SO Value</TableHead>
-                                  <TableHead className="font-semibold w-[16%] text-center">Reason</TableHead>
+                                  <TableHead className="font-semibold w-[30%]">Field</TableHead>
+                                  <TableHead className="font-semibold w-[30%]">PO Value</TableHead>
+                                  <TableHead className="font-semibold w-[30%]">SO Value</TableHead>
+                                   <TableHead className="font-semibold w-[5%] text-center">Notes</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.discrepancies.map((d, index) => (
                                   <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
                                     <TableCell className="text-center py-2 px-3 text-sm">
-                                        <span>❌</span>
+                                      <XCircle className="h-5 w-5 text-destructive inline-block" />
                                     </TableCell>
                                     <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{d.field}</TableCell>
                                     <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{d.purchaseOrderValue}</TableCell>
@@ -370,9 +373,9 @@ function OrderComparatorClientContent() {
                                     <TableCell className="text-center py-2 px-3 text-sm whitespace-pre-line">
                                       <Tooltip delayDuration={100}>
                                         <TooltipTrigger asChild>
-                                          <AlertCircle className="h-5 w-5 text-destructive inline-block cursor-help" />
+                                          <Info className="h-5 w-5 text-muted-foreground inline-block cursor-help" />
                                         </TooltipTrigger>
-                                        <TooltipContent className="bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg max-w-xs">
+                                        <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
                                           <p className="font-semibold">Discrepancy Reason:</p>
                                           <p className="text-sm whitespace-pre-line">{d.reason || 'No specific reason provided.'}</p>
                                         </TooltipContent>
@@ -415,13 +418,15 @@ function OrderComparatorClientContent() {
                                   <TableHead className="font-semibold text-xs w-[6%] text-center">SO Qty</TableHead>
                                   <TableHead className="font-semibold text-xs w-[9%] text-right">SO Unit Price</TableHead>
                                   <TableHead className="font-semibold text-xs w-[9%] text-right">SO Total</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[17%] text-center">Notes</TableHead>
+                                  <TableHead className="font-semibold text-xs w-[5%] text-center">Notes</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {comparisonResult.productLineItemComparisons.map((item, index) => (
                                   <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50'}>
-                                    <TableCell className="text-center py-1.5 px-2 text-xs">{getProductStatusIcon(item.status)}</TableCell>
+                                     <TableCell className="text-center py-1.5 px-2 text-xs">
+                                      {getProductStatusIcon(item.status)}
+                                    </TableCell>
                                     <TableCell className="py-1.5 px-2 text-xs whitespace-pre-line">{item.poProductDescription || 'N/A'}</TableCell>
                                     <TableCell className="py-1.5 px-2 text-xs text-center whitespace-pre-line">{item.poQuantity || 'N/A'}</TableCell>
                                     <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.poUnitPrice || 'N/A'}</TableCell>
@@ -485,4 +490,6 @@ export default function OrderComparatorPage() {
     
 
     
+
+
 
