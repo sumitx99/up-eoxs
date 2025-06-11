@@ -47,7 +47,7 @@ function OrderComparatorClientContent() {
       setError(null);
       setCurrentProcessedSOName(null);
       // Do not reset purchaseOrderFiles here, user might have selected them before SO loaded
-      setIsLoading(false);
+      setIsLoading(false); // Ensure not stuck in loading if SO changes mid-load
     }
   }, [searchParams, salesOrderName]);
 
@@ -76,19 +76,18 @@ function OrderComparatorClientContent() {
       return;
     }
     
-    // Check if PO files are identical to the last processed ones
     const poFileNames = purchaseOrderFiles.map(f => f.name + f.size).sort();
     if (salesOrderName === currentProcessedSOName && 
         JSON.stringify(poFileNames) === JSON.stringify(currentProcessedPOFiles) &&
-        comparisonResult) { // And there's already a result
+        comparisonResult) { 
       toast({ title: "No Changes", description: "The same Sales Order and Purchase Order files are already processed." });
-      return; // Avoid re-processing identical inputs
+      return; 
     }
 
 
     setIsLoading(true);
     setError(null);
-    setComparisonResult(null);
+    setComparisonResult(null); // Clear previous results before new submission
 
     const formData = new FormData();
     formData.append('salesOrderName', salesOrderName);
@@ -116,7 +115,7 @@ function OrderComparatorClientContent() {
         });
       }
       setCurrentProcessedSOName(salesOrderName);
-      setCurrentProcessedPOFiles(poFileNames); // Store names and sizes of processed PO files
+      setCurrentProcessedPOFiles(poFileNames); 
     } catch (e: any) {
       const errorMessage = e.message || "An unexpected error occurred during comparison.";
       setError(errorMessage);
@@ -126,6 +125,7 @@ function OrderComparatorClientContent() {
           description: errorMessage,
           duration: 9000,
       });
+      // Still set current processed info even on catch, to prevent immediate re-runs of failed identical requests
       setCurrentProcessedSOName(salesOrderName); 
       setCurrentProcessedPOFiles(poFileNames);
     } finally {
@@ -133,28 +133,7 @@ function OrderComparatorClientContent() {
     }
   };
   
-  // Effect to auto-trigger comparison if SO name is present and files might be ready
-  useEffect(() => {
-    const poFileNames = purchaseOrderFiles.map(f => f.name + f.size).sort();
-    const soNameIsSet = salesOrderName && salesOrderName.trim() !== '';
-    const soNameChanged = salesOrderName !== currentProcessedSOName;
-    const poFilesChanged = JSON.stringify(poFileNames) !== JSON.stringify(currentProcessedPOFiles);
-
-    if (soNameIsSet && !isLoading && (soNameChanged || poFilesChanged)) {
-        // Automatically trigger if SO is set and either SO or POs changed since last run
-        // Users can also explicitly click a "Compare" button if we add one
-        // For now, this auto-triggers if SO is ready and POs are selected (or changed)
-        if (purchaseOrderFiles.length > 0 || (currentProcessedPOFiles.length > 0 && poFilesChanged)) {
-             handleSubmit(); // Re-use existing submit logic
-        } else if (soNameChanged && purchaseOrderFiles.length === 0 && (!comparisonResult || currentProcessedPOFiles.length > 0)){
-            // SO changed, no POs selected, but there might have been old POs.
-            // This effectively means we are comparing SO against "no POs"
-            handleSubmit();
-        }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [salesOrderName, purchaseOrderFiles, currentProcessedSOName, currentProcessedPOFiles, isLoading]);
-
+  // Removed the useEffect hook that previously auto-triggered handleSubmit
 
   const getProductStatusIcon = (status: ProductLineItemComparison['status']) => {
     switch (status) {
@@ -198,7 +177,7 @@ function OrderComparatorClientContent() {
                     Order Documents Input
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    Provide the Sales Order identifier (fetched from ERP) and manually upload Purchase Order documents for comparison.
+                    Provide the Sales Order identifier and manually upload Purchase Order documents for comparison.
                   </p>
                 </div>
               </AccordionTrigger>
@@ -206,14 +185,14 @@ function OrderComparatorClientContent() {
                 <Card className="shadow-none border-0 rounded-t-none">
                     <CardContent className="space-y-6 pt-6 p-6">
                        <div className="space-y-2">
-                        <Label htmlFor="salesOrderNameDisplay" className="text-base font-medium">Sales Order Identifier (from ERP):</Label>
+                        <Label htmlFor="salesOrderNameDisplay" className="text-base font-medium">Sales Order Identifier:</Label>
                         {salesOrderName ? (
                            <p id="salesOrderNameDisplay" className="text-md font-semibold text-primary py-2 px-3 border rounded-md bg-secondary/30">
                             {salesOrderName}
                           </p>
                         ) : (
                           <p id="salesOrderNameDisplay" className="text-md text-muted-foreground py-2 px-3 border rounded-md">
-                            No Sales Order identifier provided via URL. Waiting for identifier...
+                            No Sales Order identifier provided. Waiting for identifier...
                           </p>
                         )}
                       </div>
@@ -271,7 +250,7 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                   <p className="text-lg">Fetching and comparing documents, please wait...</p>
-                  <p className="text-sm">This may involve multiple calls to ERP and AI analysis.</p>
+                  <p className="text-sm">This may involve calls to ERP and AI analysis.</p>
                 </div>
               )}
               {error && !isLoading && (
@@ -281,13 +260,31 @@ function OrderComparatorClientContent() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              {!isLoading && !error && !comparisonResult && salesOrderName && !currentProcessedSOName && (
-                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
-                  <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
-                  <p className="text-lg">Preparing to compare Sales Order: {salesOrderName}...</p>
-                  {(purchaseOrderFiles.length > 0) && <p className="text-sm">with {purchaseOrderFiles.length} Purchase Order file(s).</p>}
+              
+              {/* Placeholder when no SO is loaded */}
+              {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
+                  <FileText className="h-16 w-16 text-gray-400 mb-4" />
+                  <p className="text-lg">Ready for Comparison</p>
+                  <p className="text-sm">Please ensure a Sales Order identifier is available above.</p>
+                  <p className="text-sm">Upload any Purchase Orders if needed, then click "Compare Orders".</p>
                 </div>
               )}
+
+              {/* Placeholder when SO is loaded, but no comparison run yet */}
+              {!isLoading && !error && !comparisonResult && salesOrderName && salesOrderName.trim() !== '' && (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
+                  <FileText className="h-16 w-16 text-gray-400 mb-4" />
+                  <p className="text-lg">Sales Order: <span className="font-semibold text-primary">{salesOrderName}</span></p>
+                  {purchaseOrderFiles.length > 0 ? (
+                      <p className="text-sm">{purchaseOrderFiles.length} Purchase Order file(s) selected.</p>
+                  ) : (
+                      <p className="text-sm">No Purchase Order files selected.</p>
+                  )}
+                  <p className="text-sm mt-2">Click "Compare Orders" to begin analysis.</p>
+                </div>
+              )}
+
               {!isLoading && !error && comparisonResult && (
                 <>
                   <div>
@@ -455,13 +452,6 @@ function OrderComparatorClientContent() {
                   </Accordion>
                 </>
               )}
-              {!isLoading && !error && !comparisonResult && (!salesOrderName || salesOrderName.trim() === '') && (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
-                  <Search className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Waiting for Sales Order identifier to begin comparison.</p>
-                  <p className="text-sm">Please ensure a Sales Order identifier is provided via the URL and upload any Purchase Orders if needed.</p>
-                </div>
-              )}
             </CardContent>
             {comparisonResult && !isLoading && !error && (
               <CardFooter>
@@ -484,4 +474,6 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+    
+
     
