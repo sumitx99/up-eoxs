@@ -5,7 +5,6 @@
 import React, { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -163,20 +162,19 @@ function OrderComparatorClientContent() {
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
     let statusText = item.status.replace(/_/g, ' ').toLowerCase();
-    let iconColor = 'text-red-600'; // Default to red
+    let iconColor = 'text-red-600 dark:text-red-400'; 
 
     switch (item.status) {
       case 'MATCHED':
       case 'PARTIAL_MATCH_DETAILS_DIFFER':
-        icon = <CheckCircle className="h-5 w-5 text-green-600" />;
-        iconColor = 'text-green-600';
+        icon = <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />;
+        iconColor = 'text-green-600 dark:text-green-400';
         if (item.status === 'PARTIAL_MATCH_DETAILS_DIFFER') {
             statusText = 'partial match, details differ';
         }
         break;
-      default: // For MISMATCH_QUANTITY, MISMATCH_UNIT_PRICE, MISMATCH_TOTAL_PRICE, PO_ONLY, SO_ONLY, MISMATCH_DESCRIPTION
-        icon = <XCircle className="h-5 w-5 text-red-600" />;
-        // iconColor remains 'text-red-600'
+      default: 
+        icon = <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
         break;
     }
 
@@ -195,7 +193,7 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <header className="mb-8 text-center pt-4">
           <div className="flex items-center justify-center mb-2">
-            <h1 className="text-5xl font-bold text-foreground">Contract Review AI</h1>
+            <h1 className="text-5xl font-bold text-foreground">Order Comparator</h1>
           </div>
         </header>
 
@@ -213,9 +211,6 @@ function OrderComparatorClientContent() {
                 <Card className="shadow-none border-0 rounded-t-none">
                     <CardContent className="space-y-6 pt-6 p-6">
                       <div className="space-y-2">
-                        <Label htmlFor="purchaseOrderFile" className="text-base font-medium flex items-center">
-                          <UploadCloud className="mr-2 h-5 w-5" /> Purchase Order Document:
-                        </Label>
                         <Input
                           id="purchaseOrderFile"
                           name="purchaseOrderFile"
@@ -275,7 +270,7 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-xl">Ready for Comparison</p>
-                  <p className="text-base">Comparison will begin shortly right after You upload the Purchase Order.</p>
+                  <p className="text-base">Comparison will being shortly after You upload the Purchase Order.</p>
                 </div>
               )}
 
@@ -333,7 +328,7 @@ function OrderComparatorClientContent() {
                                 {comparisonResult.productLineItemComparisons.map((item, index) => {
                                   const { icon, tooltipContent } = getItemStatusIconAndTooltip(item);
                                   return (
-                                    <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50'}>
+                                    <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50 dark:bg-muted/10 dark:hover:bg-muted/20'}>
                                       <TableCell className="text-center py-1.5 px-2 text-base">
                                         <Tooltip delayDuration={100}>
                                           <TooltipTrigger asChild>
@@ -387,24 +382,31 @@ function OrderComparatorClientContent() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {comparisonResult.discrepancies.map((d, index) => (
-                                  <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
+                                {comparisonResult.discrepancies.map((d, index) => {
+                                  let displayField = d.field;
+                                  if (d.field === "Buyer Name") {
+                                    displayField = "Name";
+                                  } else if (d.field === "Buyer Address") {
+                                    displayField = "Address";
+                                  }
+                                  return (
+                                  <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10 dark:bg-destructive/10 dark:hover:bg-destructive/20'}>
                                     <TableCell className="text-center py-2 px-3 text-base whitespace-pre-line">
                                       <Tooltip delayDuration={100}>
                                         <TooltipTrigger asChild>
-                                            <XCircle className="h-5 w-5 text-red-600 inline-block cursor-help" />
+                                            <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 inline-block cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
-                                          <p className="font-semibold text-red-600">Discrepancy Reason:</p>
+                                          <p className="font-semibold text-red-600 dark:text-red-400">Discrepancy Reason:</p>
                                           <p className="text-base whitespace-pre-line">{d.reason || 'No specific reason provided.'}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
-                                    <TableCell className="font-medium py-2 px-3 text-base whitespace-pre-line">{d.field}</TableCell>
+                                    <TableCell className="font-medium py-2 px-3 text-base whitespace-pre-line">{displayField}</TableCell>
                                     <TableCell className="py-2 px-3 text-base whitespace-pre-line">{d.purchaseOrderValue}</TableCell>
                                     <TableCell className="py-2 px-3 text-base whitespace-pre-line">{d.salesOrderValue}</TableCell>
                                   </TableRow>
-                                ))}
+                                )})}
                               </TableBody>
                             </Table>
                           </div>
@@ -445,6 +447,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
