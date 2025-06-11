@@ -163,7 +163,7 @@ function OrderComparatorClientContent() {
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
     let statusText = item.status.replace(/_/g, ' ').toLowerCase();
-    let iconColor = 'text-red-600'; // Default for mismatches
+    let iconColor = 'text-red-600';
 
     switch (item.status) {
       case 'MATCHED':
@@ -182,7 +182,7 @@ function OrderComparatorClientContent() {
     const tooltipContent = (
       <>
         <p className={`font-semibold capitalize ${iconColor}`}>{statusText}:</p>
-        <p className="text-sm whitespace-pre-line">{item.comparisonNotes || 'No specific notes.'}</p>
+        <p className="text-base whitespace-pre-line">{item.comparisonNotes || 'No specific notes.'}</p>
       </>
     );
     return { icon, tooltipContent };
@@ -194,7 +194,7 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <header className="mb-8 text-center pt-4">
           <div className="flex items-center justify-center mb-2">
-            <h1 className="text-4xl font-bold text-foreground">Contract Review AI</h1>
+            <h1 className="text-5xl font-bold text-foreground">Contract Review AI</h1>
           </div>
         </header>
 
@@ -203,7 +203,7 @@ function OrderComparatorClientContent() {
             <AccordionItem value="input-documents" className="border-b-0">
                <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
                 <div>
-                  <h2 className="text-2xl font-semibold flex items-center">
+                  <h2 className="text-3xl font-semibold flex items-center">
                     Order Details Entry
                   </h2>
                 </div>
@@ -221,19 +221,19 @@ function OrderComparatorClientContent() {
                           type="file"
                           onChange={handlePOFileChange}
                           ref={fileInputRef}
-                          className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                          className="block w-full text-base text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-base file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                           accept=".pdf,.png,.jpg,.jpeg,.csv,.xls,.xlsx"
                         />
                         {poFileSelectedText === "Uploaded Document" ? (
-                            <p className="text-xs text-green-600 dark:text-green-500 flex items-center">
+                            <p className="text-sm text-green-600 dark:text-green-500 flex items-center">
                                 <CheckCircle className="h-4 w-4 mr-1 inline-block" /> {poFileSelectedText}
                             </p>
                         ) : (
-                            <p className="text-xs text-muted-foreground">{poFileSelectedText}</p>
+                            <p className="text-sm text-muted-foreground">{poFileSelectedText}</p>
                         )}
                         {purchaseOrderFile && (
                           <div className="mt-2 space-y-1">
-                            <div className="flex items-center justify-between text-sm text-muted-foreground p-2 border rounded-md">
+                            <div className="flex items-center justify-between text-base text-muted-foreground p-2 border rounded-md">
                               <span className="truncate" title={purchaseOrderFile.name}>
                                 {purchaseOrderFile.name} ({(purchaseOrderFile.size / 1024).toFixed(1)} KB)
                               </span>
@@ -253,14 +253,14 @@ function OrderComparatorClientContent() {
 
           <Card className="shadow-lg mt-8">
             <CardHeader>
-              <CardTitle className="text-2xl">Response</CardTitle>
+              <CardTitle className="text-3xl">Response</CardTitle>
             </CardHeader>
             <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col space-y-6">
               {isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                  <p className="text-lg">Fetching and comparing documents, please wait...</p>
-                  <p className="text-sm">This may involve calls to ERP and AI analysis.</p>
+                  <p className="text-xl">Fetching and comparing documents, please wait...</p>
+                  <p className="text-base">This may involve calls to ERP and AI analysis.</p>
                 </div>
               )}
               {error && !isLoading && (
@@ -274,31 +274,31 @@ function OrderComparatorClientContent() {
               {!isLoading && !error && !comparisonResult && !salesOrderNameValid && !purchaseOrderFile && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Ready for Comparison</p>
-                  <p className="text-sm">Comparison will being shortly after You upload the Purchase Order.</p>
+                  <p className="text-xl">Ready for Comparison</p>
+                  <p className="text-base">Comparison will being shortly after You upload the Purchase Order.</p>
                 </div>
               )}
 
               {!isLoading && !error && !comparisonResult && salesOrderNameValid && !purchaseOrderFile && (
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">System ready.</p>
-                  <p className="text-sm mt-2">Please upload a Purchase Order document to begin analysis.</p>
+                  <p className="text-xl">System ready.</p>
+                  <p className="text-base mt-2">Please upload a Purchase Order document to begin analysis.</p>
                 </div>
               )}
 
               {!isLoading && !error && !comparisonResult && !salesOrderNameValid && purchaseOrderFile && (
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFile.name}</span> selected.</p>
-                  <p className="text-sm mt-2">Waiting for Sales Order identifier (via URL) to begin analysis.</p>
+                  <p className="text-xl">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFile.name}</span> selected.</p>
+                  <p className="text-base mt-2">Waiting for Sales Order identifier (via URL) to begin analysis.</p>
                 </div>
               )}
                {!isLoading && !error && !comparisonResult && salesOrderNameValid && purchaseOrderFile && !alreadyProcessedThisCombination && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                    <p className="text-lg">Preparing to compare...</p>
-                    <p className="text-sm">Purchase Order: {purchaseOrderFile.name}</p>
+                    <p className="text-xl">Preparing to compare...</p>
+                    <p className="text-base">Purchase Order: {purchaseOrderFile.name}</p>
                 </div>
               )}
 
@@ -307,7 +307,7 @@ function OrderComparatorClientContent() {
                 <>
                   <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "item-comparison", "matched-info"]}>
                     <AccordionItem value="matched-info">
-                      <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
+                      <AccordionTrigger className="text-2xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
                            Matched Info ({comparisonResult.matchedItems?.length || 0})
                         </div>
@@ -326,20 +326,20 @@ function OrderComparatorClientContent() {
                               <TableBody>
                                 {comparisonResult.matchedItems.map((item, index) => (
                                   <TableRow key={`match-${index}-${item.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-accent/5 hover:bg-accent/10'}>
-                                    <TableCell className="text-center py-2 px-3 text-sm">
+                                    <TableCell className="text-center py-2 px-3 text-base">
                                       <CheckCircle className="h-5 w-5 text-green-600 inline-block" />
                                     </TableCell>
-                                    <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{item.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{item.value}</TableCell>
+                                    <TableCell className="font-medium py-2 px-3 text-base whitespace-pre-line">{item.field}</TableCell>
+                                    <TableCell className="py-2 px-3 text-base whitespace-pre-line">{item.value}</TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
                             </Table>
                           </div>
                         ) : (
-                          <Alert variant="default" className="mt-2 text-sm">
+                          <Alert variant="default" className="mt-2 text-base">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No Matched Info Identified.</AlertTitle>
+                            <AlertTitle className="text-lg">No Matched Info Identified.</AlertTitle>
                             <AlertDescription>The AI did not find any general fields that match between the Sales Order and Purchase Order(s).</AlertDescription>
                           </Alert>
                         )}
@@ -347,7 +347,7 @@ function OrderComparatorClientContent() {
                     </AccordionItem>
 
                     <AccordionItem value="discrepancies">
-                      <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
+                      <AccordionTrigger className="text-2xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
                            General Discrepancies ({comparisonResult.discrepancies?.length || 0})
                         </div>
@@ -367,29 +367,29 @@ function OrderComparatorClientContent() {
                               <TableBody>
                                 {comparisonResult.discrepancies.map((d, index) => (
                                   <TableRow key={`disc-${index}-${d.field.replace(/\s+/g, '-')}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-destructive/5 hover:bg-destructive/10'}>
-                                    <TableCell className="text-center py-2 px-3 text-sm whitespace-pre-line">
+                                    <TableCell className="text-center py-2 px-3 text-base whitespace-pre-line">
                                       <Tooltip delayDuration={100}>
                                         <TooltipTrigger asChild>
                                             <XCircle className="h-5 w-5 text-red-600 inline-block cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent className="bg-popover text-popover-foreground p-2 rounded-md shadow-lg max-w-xs">
                                           <p className="font-semibold text-red-600">Discrepancy Reason:</p>
-                                          <p className="text-sm whitespace-pre-line">{d.reason || 'No specific reason provided.'}</p>
+                                          <p className="text-base whitespace-pre-line">{d.reason || 'No specific reason provided.'}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
-                                    <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{d.field}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{d.purchaseOrderValue}</TableCell>
-                                    <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{d.salesOrderValue}</TableCell>
+                                    <TableCell className="font-medium py-2 px-3 text-base whitespace-pre-line">{d.field}</TableCell>
+                                    <TableCell className="py-2 px-3 text-base whitespace-pre-line">{d.purchaseOrderValue}</TableCell>
+                                    <TableCell className="py-2 px-3 text-base whitespace-pre-line">{d.salesOrderValue}</TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
                             </Table>
                           </div>
                         ) : (
-                           <Alert variant="default" className="mt-2 text-sm">
+                           <Alert variant="default" className="mt-2 text-base">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No General Discrepancies Found.</AlertTitle>
+                            <AlertTitle className="text-lg">No General Discrepancies Found.</AlertTitle>
                             <AlertDescription>The AI did not find any general discrepancies between the Sales Order and Purchase Order(s).</AlertDescription>
                           </Alert>
                         )}
@@ -397,7 +397,7 @@ function OrderComparatorClientContent() {
                     </AccordionItem>
 
                     <AccordionItem value="item-comparison">
-                      <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
+                      <AccordionTrigger className="text-2xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
                           Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
                         </div>
@@ -408,15 +408,15 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold text-xs w-[10%] text-center">Status</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[15%]">PO Product</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[6%] text-center">PO Qty</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[9%] text-right">PO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[9%] text-right">PO Total</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[15%]">SO Product</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[6%] text-center">SO Qty</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[9%] text-right">SO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-xs w-[9%] text-right">SO Total</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[10%] text-center">Status</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[15%]">PO Product</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[6%] text-center">PO Qty</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[9%] text-right">PO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[9%] text-right">PO Total</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[15%]">SO Product</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[6%] text-center">SO Qty</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[9%] text-right">SO Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-sm w-[9%] text-right">SO Total</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -424,7 +424,7 @@ function OrderComparatorClientContent() {
                                   const { icon, tooltipContent } = getItemStatusIconAndTooltip(item);
                                   return (
                                     <TableRow key={`prod-comp-${index}`} className={index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30 hover:bg-muted/50'}>
-                                      <TableCell className="text-center py-1.5 px-2 text-xs">
+                                      <TableCell className="text-center py-1.5 px-2 text-sm">
                                         <Tooltip delayDuration={100}>
                                           <TooltipTrigger asChild>
                                             <span className="inline-block cursor-help">{icon}</span>
@@ -434,14 +434,14 @@ function OrderComparatorClientContent() {
                                           </TooltipContent>
                                         </Tooltip>
                                       </TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs whitespace-pre-line">{item.poProductDescription || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs text-center whitespace-pre-line">{item.poQuantity || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.poUnitPrice || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.poTotalPrice || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs whitespace-pre-line">{item.soProductDescription || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs text-center whitespace-pre-line">{item.soQuantity || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.soUnitPrice || 'N/A'}</TableCell>
-                                      <TableCell className="py-1.5 px-2 text-xs text-right whitespace-pre-line">{item.soTotalPrice || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm whitespace-pre-line">{item.poProductDescription || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm text-center whitespace-pre-line">{item.poQuantity || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.poUnitPrice || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.poTotalPrice || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm whitespace-pre-line">{item.soProductDescription || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm text-center whitespace-pre-line">{item.soQuantity || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.soUnitPrice || 'N/A'}</TableCell>
+                                      <TableCell className="py-1.5 px-2 text-sm text-right whitespace-pre-line">{item.soTotalPrice || 'N/A'}</TableCell>
                                     </TableRow>
                                   );
                                 })}
@@ -449,9 +449,9 @@ function OrderComparatorClientContent() {
                             </Table>
                           </div>
                         ) : (
-                          <Alert variant="default" className="mt-2 text-sm">
+                          <Alert variant="default" className="mt-2 text-base">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No Items Compared</AlertTitle>
+                            <AlertTitle className="text-lg">No Items Compared</AlertTitle>
                             <AlertDescription>The AI did not identify or compare specific items from the documents.</AlertDescription>
                           </Alert>
                         )}
@@ -463,7 +463,7 @@ function OrderComparatorClientContent() {
             </CardContent>
             {comparisonResult && !isLoading && !error && (
               <CardFooter>
-                <ExportButton data={comparisonResult} reportId="reportContentArea" variant="secondary" className="w-full text-lg py-3" />
+                <ExportButton data={comparisonResult} reportId="reportContentArea" variant="secondary" className="w-full text-xl py-3" />
               </CardFooter>
             )}
           </Card>
@@ -474,7 +474,7 @@ function OrderComparatorClientContent() {
 
 export default function OrderComparatorPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><Loader2 className="h-16 w-16 animate-spin text-primary" /> <p className="ml-4 text-lg">Loading page...</p></div>}>
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><Loader2 className="h-16 w-16 animate-spin text-primary" /> <p className="ml-4 text-xl">Loading page...</p></div>}>
       <OrderComparatorClientContent />
     </Suspense>
   );
@@ -484,6 +484,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
