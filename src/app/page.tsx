@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, FileWarning, Info, UploadCloud, FileText, XCircle, CheckCircle } from 'lucide-react';
-import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
+import type { CompareOrderDetailsOutput, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
 import { useToast } from '@/hooks/use-toast';
@@ -163,7 +163,7 @@ function OrderComparatorClientContent() {
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
     let statusText = item.status.replace(/_/g, ' ').toLowerCase();
-    let iconColor = 'text-red-600';
+    let iconColor = 'text-red-600'; // Default to red
 
     switch (item.status) {
       case 'MATCHED':
@@ -174,8 +174,9 @@ function OrderComparatorClientContent() {
             statusText = 'partial match, details differ';
         }
         break;
-      default:
+      default: // For MISMATCH_QUANTITY, MISMATCH_UNIT_PRICE, MISMATCH_TOTAL_PRICE, PO_ONLY, SO_ONLY, MISMATCH_DESCRIPTION
         icon = <XCircle className="h-5 w-5 text-red-600" />;
+        // iconColor remains 'text-red-600'
         break;
     }
 
@@ -204,7 +205,7 @@ function OrderComparatorClientContent() {
                <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
                 <div>
                   <h2 className="text-3xl font-semibold flex items-center">
-                    Order Details Entry
+                    Upload PO
                   </h2>
                 </div>
               </AccordionTrigger>
@@ -260,7 +261,6 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                   <p className="text-xl">Fetching and comparing documents, please wait...</p>
-                  <p className="text-base">This may involve calls to ERP and AI analysis.</p>
                 </div>
               )}
               {error && !isLoading && (
@@ -305,8 +305,8 @@ function OrderComparatorClientContent() {
 
               {!isLoading && !error && comparisonResult && (
                 <>
-                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "item-comparison"]}>
-                    <AccordionItem value="item-comparison">
+                  <Accordion type="multiple" className="w-full" defaultValue={["item-comparison", "discrepancies"]}>
+                     <AccordionItem value="item-comparison">
                       <AccordionTrigger className="text-2xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
                           Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
@@ -318,15 +318,15 @@ function OrderComparatorClientContent() {
                             <Table>
                               <TableHeader className="bg-muted/50 sticky top-0 z-10">
                                 <TableRow>
-                                  <TableHead className="font-semibold text-base w-[10%] text-center">Status</TableHead>
+                                  <TableHead className="font-semibold text-base w-[8%] text-center">Status</TableHead>
                                   <TableHead className="font-semibold text-base w-[15%]">PO Product</TableHead>
-                                  <TableHead className="font-semibold text-base w-[6%] text-center">PO Qty</TableHead>
-                                  <TableHead className="font-semibold text-base w-[9%] text-right">PO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-base w-[9%] text-right">PO Total</TableHead>
+                                  <TableHead className="font-semibold text-base w-[6%] text-center">Qty</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">Total</TableHead>
                                   <TableHead className="font-semibold text-base w-[15%]">SO Product</TableHead>
-                                  <TableHead className="font-semibold text-base w-[6%] text-center">SO Qty</TableHead>
-                                  <TableHead className="font-semibold text-base w-[9%] text-right">SO Unit Price</TableHead>
-                                  <TableHead className="font-semibold text-base w-[9%] text-right">SO Total</TableHead>
+                                  <TableHead className="font-semibold text-base w-[6%] text-center">Qty</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">Unit Price</TableHead>
+                                  <TableHead className="font-semibold text-base w-[9%] text-right">Total</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -445,6 +445,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
