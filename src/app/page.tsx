@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, FileWarning, Scale, Search, FileKey2, AlertCircle, PackageSearch, BadgeHelp, Info, MinusCircle, PackagePlus, HelpCircle, UploadCloud, FileText, XCircle } from 'lucide-react';
+import { Loader2, FileWarning, FileKey2, AlertCircle, PackageSearch, Info, MinusCircle, PackagePlus, HelpCircle, UploadCloud, FileText, XCircle } from 'lucide-react';
 import type { CompareOrderDetailsOutput, MatchedItem, Discrepancy, ProductLineItemComparison } from '@/ai/flows/compare-order-details';
 import { compareOrdersAction, type CompareActionState } from '@/app/actions';
 import { ExportButton } from '@/components/export-button';
@@ -45,8 +45,6 @@ function OrderComparatorClientContent() {
       setComparisonResult(null);
       setError(null);
       setCurrentProcessedSOName(null);
-      // No auto-loading, so setIsLoading(false) might not be needed here
-      // or if it is, ensure it's based on a clear loading state, not just salesOrderName change
     }
   }, [searchParams, salesOrderName]);
 
@@ -54,31 +52,25 @@ function OrderComparatorClientContent() {
   const handlePOFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       setPurchaseOrderFile(event.target.files[0]);
-      setComparisonResult(null); // Reset comparison if PO file changes
-      setError(null); // Reset error if PO file changes
+      setComparisonResult(null); 
+      setError(null); 
     } else {
       setPurchaseOrderFile(null);
-      // Optionally reset comparisonResult and error if the file is cleared
-      // setComparisonResult(null);
-      // setError(null);
     }
   };
 
   const removePOFile = () => {
     setPurchaseOrderFile(null);
-    setCurrentProcessedPOFileSignature(null); // Reset signature when file is removed
+    setCurrentProcessedPOFileSignature(null); 
     if (fileInputRef.current) {
-        fileInputRef.current.value = ''; // Clears the file input visually
+        fileInputRef.current.value = ''; 
     }
-    // Optionally reset comparisonResult and error if the file is removed
-    // setComparisonResult(null);
-    // setError(null);
   };
 
   const handleSubmit = useCallback(async () => {
     if (!salesOrderName || salesOrderName.trim() === '') {
-      setError('Sales Order is required for comparison.');
-      toast({ variant: "destructive", title: "Input Missing", description: "Sales Order is required." });
+      setError('Sales Order identifier from URL is required for comparison.');
+      toast({ variant: "destructive", title: "Input Missing", description: "Sales Order identifier from URL is required." });
       return;
     }
 
@@ -88,13 +80,11 @@ function OrderComparatorClientContent() {
       return;
     }
     
-    // Generate a signature for the current PO file to prevent reprocessing identical inputs
     const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
 
-    // Check if current inputs match already processed inputs AND there's an existing result or error
     if (salesOrderName === currentProcessedSOName && 
         poFileSignature === currentProcessedPOFileSignature &&
-        (comparisonResult || error) // if there was a result OR an error for this combo, don't re-run
+        (comparisonResult || error)
         ) { 
       toast({ title: "No Changes", description: "The same Sales Order and Purchase Order file are already processed." });
       return; 
@@ -102,7 +92,7 @@ function OrderComparatorClientContent() {
 
     setIsLoading(true);
     setError(null);
-    setComparisonResult(null); // Clear previous results before new comparison
+    setComparisonResult(null); 
 
     const formData = new FormData();
     formData.append('salesOrderName', salesOrderName);
@@ -117,7 +107,7 @@ function OrderComparatorClientContent() {
           variant: "destructive",
           title: "Comparison Failed",
           description: resultState.error,
-          duration: 9000, // Longer duration for error messages
+          duration: 9000, 
         });
       }
       if (resultState.data) {
@@ -127,7 +117,6 @@ function OrderComparatorClientContent() {
           description: "The order documents have been compared successfully.",
         });
       }
-      // Update processed state *after* the call, regardless of success or failure
       setCurrentProcessedSOName(salesOrderName);
       setCurrentProcessedPOFileSignature(poFileSignature); 
     } catch (e: any) {
@@ -139,23 +128,20 @@ function OrderComparatorClientContent() {
           description: errorMessage,
           duration: 9000,
       });
-      // Still update processed state to prevent immediate re-triggering on error
       setCurrentProcessedSOName(salesOrderName); 
       setCurrentProcessedPOFileSignature(poFileSignature);
     } finally {
       setIsLoading(false);
     }
-  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]); // Added 'error' to dependency array
+  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]); 
   
   useEffect(() => {
-    // This effect triggers the comparison automatically when both SO name and PO file are present
-    // and they haven't been processed together yet, or if they have changed.
     if (salesOrderName && salesOrderName.trim() !== '' && purchaseOrderFile) {
       const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
       const alreadyProcessedThisCombination = (
         salesOrderName === currentProcessedSOName &&
         poFileSignature === currentProcessedPOFileSignature &&
-        (comparisonResult || error) // Important: If there's an error for this combo, don't re-run
+        (comparisonResult || error) 
       );
 
       if (!isLoading && !alreadyProcessedThisCombination) {
@@ -189,7 +175,6 @@ function OrderComparatorClientContent() {
       <div className="min-h-screen p-4 md:p-8 bg-background">
         <header className="mb-8 text-center pt-4">
           <div className="flex items-center justify-center mb-2">
-            <Scale className="h-12 w-12 text-primary mr-3" />
             <h1 className="text-4xl font-bold text-foreground">Contract Review AI</h1>
           </div>
         </header>
@@ -200,7 +185,6 @@ function OrderComparatorClientContent() {
                <AccordionTrigger className="text-left hover:no-underline p-6 data-[state=open]:border-b">
                 <div>
                   <h2 className="text-2xl font-semibold flex items-center">
-                    <Search className="mr-3 h-7 w-7 text-primary" />
                     Order Documents Input
                   </h2>
                 </div>
@@ -208,18 +192,6 @@ function OrderComparatorClientContent() {
               <AccordionContent className="p-0">
                 <Card className="shadow-none border-0 rounded-t-none">
                     <CardContent className="space-y-6 pt-6 p-6">
-                       <div className="space-y-2">
-                        <Label htmlFor="salesOrderNameDisplay" className="text-base font-medium">Sales Order:</Label>
-                        {salesOrderName ? (
-                           <p id="salesOrderNameDisplay" className="text-md font-semibold text-primary py-2 px-3 border rounded-md bg-secondary/30">
-                            {salesOrderName}
-                          </p>
-                        ) : (
-                          <p id="salesOrderNameDisplay" className="text-md text-muted-foreground py-2 px-3 border rounded-md">
-                            No Sales Order provided. Waiting for identifier...
-                          </p>
-                        )}
-                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="purchaseOrderFile" className="text-base font-medium flex items-center">
                           <UploadCloud className="mr-2 h-5 w-5" /> Purchase Order Document:
@@ -233,7 +205,7 @@ function OrderComparatorClientContent() {
                           className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                           accept=".pdf,.png,.jpg,.jpeg,.csv,.xls,.xlsx"
                         />
-                        <p className="text-xs text-muted-foreground">Upload one PDF, image (PNG, JPG), CSV, or Excel file.</p>
+                        <p className="text-xs text-muted-foreground">Upload a Document</p>
                         {purchaseOrderFile && (
                           <div className="mt-2 space-y-1">
                             <div className="flex items-center justify-between text-sm text-muted-foreground p-2 border rounded-md">
@@ -256,7 +228,7 @@ function OrderComparatorClientContent() {
 
           <Card className="shadow-lg mt-8">
             <CardHeader>
-              <CardTitle className="text-2xl">Comparison Report</CardTitle>
+              <CardTitle className="text-2xl">Response</CardTitle>
             </CardHeader>
             <CardContent id="reportContentArea" className="min-h-[300px] flex flex-col space-y-6">
               {isLoading && (
@@ -278,7 +250,7 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Ready for Comparison</p>
-                  <p className="text-sm">Ensure a Sales Order is available and upload a Purchase Order file.</p>
+                  <p className="text-sm">Ensure a Sales Order is available (via URL) and upload a Purchase Order file.</p>
                   <p className="text-sm">Comparison will start automatically.</p>
                 </div>
               )}
@@ -286,7 +258,7 @@ function OrderComparatorClientContent() {
               {!isLoading && !error && !comparisonResult && salesOrderName && salesOrderName.trim() !== '' && !purchaseOrderFile && (
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg">Sales Order: <span className="font-semibold text-primary">{salesOrderName}</span></p>
+                  <p className="text-lg">Sales Order identifier detected.</p>
                   <p className="text-sm mt-2">Please upload a Purchase Order file to begin analysis.</p>
                 </div>
               )}
@@ -295,7 +267,7 @@ function OrderComparatorClientContent() {
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFile.name}</span> selected.</p>
-                  <p className="text-sm mt-2">Waiting for Sales Order to begin analysis.</p>
+                  <p className="text-sm mt-2">Waiting for Sales Order identifier (via URL) to begin analysis.</p>
                 </div>
               )}
                {!isLoading && !error && !comparisonResult && salesOrderName && purchaseOrderFile &&
@@ -303,7 +275,6 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                     <p className="text-lg">Preparing to compare...</p>
-                    <p className="text-sm">Sales Order: {salesOrderName}</p>
                     <p className="text-sm">Purchase Order: {purchaseOrderFile.name}</p>
                 </div>
               )}
@@ -311,21 +282,12 @@ function OrderComparatorClientContent() {
 
               {!isLoading && !error && comparisonResult && (
                 <>
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2 text-foreground flex items-center">
-                      <BadgeHelp className="mr-2 h-6 w-6 text-primary" /> AI Summary
-                    </h3>
-                    <p className="text-sm text-muted-foreground bg-secondary p-3 rounded-md whitespace-pre-wrap">
-                      {comparisonResult.summary || 'No summary provided.'}
-                    </p>
-                  </div>
-
-                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "product-line-items"]}>
-                    <AccordionItem value="matched-items">
+                  <Accordion type="multiple" className="w-full" defaultValue={["discrepancies", "item-comparison"]}>
+                    <AccordionItem value="matched-info">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
                           <FileKey2 className="mr-2 h-6 w-6 text-blue-600" />
-                          General Matched Fields ({comparisonResult.matchedItems?.length || 0})
+                          Matched Info ({comparisonResult.matchedItems?.length || 0})
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
@@ -345,7 +307,7 @@ function OrderComparatorClientContent() {
                                     <TableCell className="font-medium py-2 px-3 text-sm whitespace-pre-line">{item.field}</TableCell>
                                     <TableCell className="py-2 px-3 text-sm whitespace-pre-line">{item.value}</TableCell>
                                     <TableCell className="text-center py-2 px-3 text-sm whitespace-pre-line">
-                                      <span className="capitalize">{item.matchQuality || 'Exact'}</span>
+                                      <span>✅</span>
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -355,7 +317,7 @@ function OrderComparatorClientContent() {
                         ) : (
                           <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No General Matched Fields Identified.</AlertTitle>
+                            <AlertTitle className="text-base">No Matched Info Identified.</AlertTitle>
                             <AlertDescription>The AI did not find any general fields that match between the Sales Order and Purchase Order(s).</AlertDescription>
                           </Alert>
                         )}
@@ -413,11 +375,11 @@ function OrderComparatorClientContent() {
                       </AccordionContent>
                     </AccordionItem>
 
-                    <AccordionItem value="product-line-items">
+                    <AccordionItem value="item-comparison">
                       <AccordionTrigger className="text-xl font-semibold text-foreground hover:no-underline">
                         <div className="flex items-center">
                           <PackageSearch className="mr-2 h-6 w-6 text-purple-600" />
-                          Product Line Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
+                          Item Comparison ({comparisonResult.productLineItemComparisons?.length || 0})
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
@@ -467,8 +429,8 @@ function OrderComparatorClientContent() {
                         ) : (
                           <Alert variant="default" className="mt-2 text-sm">
                             <Info className="h-4 w-4" />
-                            <AlertTitle className="text-base">No Product Line Items Compared</AlertTitle>
-                            <AlertDescription>The AI did not identify or compare specific product line items from the documents.</AlertDescription>
+                            <AlertTitle className="text-base">No Items Compared</AlertTitle>
+                            <AlertDescription>The AI did not identify or compare specific items from the documents.</AlertDescription>
                           </Alert>
                         )}
                       </AccordionContent>
@@ -498,4 +460,6 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
+    
+
     
