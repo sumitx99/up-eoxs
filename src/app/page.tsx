@@ -221,7 +221,7 @@ function OrderComparatorClientContent() {
                           type="file"
                           onChange={handlePOFileChange}
                           ref={fileInputRef}
-                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                          className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                           accept=".pdf,.png,.jpg,.jpeg,.csv,.xls,.xlsx"
                         />
                         {poFileSelectedText === "Uploaded Document" ? (
@@ -360,8 +360,8 @@ function OrderComparatorClientContent() {
                                 <TableRow>
                                   <TableHead className="font-semibold w-[10%] text-center">Reasons</TableHead>
                                   <TableHead className="font-semibold w-[30%]">Buyer's Info</TableHead>
-                                  <TableHead className="font-semibold w-[30%]">PO Value</TableHead>
-                                  <TableHead className="font-semibold w-[30%]">SO Value</TableHead>
+                                  <TableHead className="font-semibold w-[30%]">PO</TableHead>
+                                  <TableHead className="font-semibold w-[30%]">SO</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -484,6 +484,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
