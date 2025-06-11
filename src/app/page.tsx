@@ -163,7 +163,7 @@ function OrderComparatorClientContent() {
   const getItemStatusIconAndTooltip = (item: ProductLineItemComparison) => {
     let icon;
     let statusText = item.status.replace(/_/g, ' ').toLowerCase();
-    let iconColor = 'text-red-600';
+    let iconColor = 'text-red-600'; // Default for mismatches
 
     switch (item.status) {
       case 'MATCHED':
@@ -275,8 +275,7 @@ function OrderComparatorClientContent() {
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-lg">Ready for Comparison</p>
-                  <p className="text-sm">Ensure a Sales Order is specified in the URL and upload a Purchase Order document.</p>
-                  <p className="text-sm">Comparison will start automatically.</p>
+                  <p className="text-sm">Comparison will being shortly after You upload the Purchase Order.</p>
                 </div>
               )}
 
@@ -485,6 +484,7 @@ export default function OrderComparatorPage() {
     
 
     
+
 
 
 
