@@ -95,24 +95,29 @@ async function fetchSalesOrderPdfFromOdoo(
   const reportUrl = `${odooUrl}/report/pdf/sale.report_saleorder/${saleId}`;
   console.log(`SERVER_ACTION: Attempting to download SO PDF from: ${reportUrl}`);
   const pdfResponse = await axiosInstance.get(reportUrl, { responseType: 'arraybuffer' });
+  const pdfBuffer = Buffer.from(pdfResponse.data);
+  const startOfFile = pdfBuffer.subarray(0, 100).toString('utf-8').toLowerCase();
+  
+  if (startOfFile.includes('<!doctype html') || startOfFile.includes('<html')) {
+    console.error(`SERVER_ACTION: Failed to fetch PDF for SO '${actualSaleOrderName}'. Odoo returned an HTML page instead of a PDF. This typically indicates a login, session, or permissions issue.`);
+    throw new Error(`Odoo did not return a PDF for '${actualSaleOrderName}'. It returned an HTML page, which usually indicates a login or permissions issue.`);
+  }
 
   const contentType = pdfResponse.headers['content-type'] || pdfResponse.headers['Content-Type'];
   console.log(`SERVER_ACTION: SO PDF Download Response Status: ${pdfResponse.status}, Content-Type: ${contentType}`);
 
-  if (pdfResponse.status !== 200 || !contentType || !contentType.toLowerCase().includes('application/pdf') || !pdfResponse.data || !(pdfResponse.data.byteLength > 0)) {
-    let errorDetails = `Odoo did not return a valid PDF for Sales Order '${actualSaleOrderName}'. Status: ${pdfResponse.status}. Content-Type: ${contentType}.`;
-    if (contentType && (contentType.toLowerCase().includes('text/html') || contentType.toLowerCase().includes('application/json'))) {
-      try { errorDetails += ` Response preview: ${Buffer.from(pdfResponse.data).toString('utf8').substring(0, 200)}`; } catch (decodeError) { /* ignore */ }
-    }
+  if (pdfResponse.status !== 200 || !pdfResponse.data || !(pdfResponse.data.byteLength > 0)) {
+    let errorDetails = `Odoo returned an empty or invalid response for Sales Order '${actualSaleOrderName}'. Status: ${pdfResponse.status}.`;
     console.error('SERVER_ACTION:', errorDetails, 'Data length:', pdfResponse.data?.byteLength);
     throw new Error(errorDetails);
   }
   console.log(`SERVER_ACTION: Successfully fetched SO PDF: ${actualSaleOrderName}.pdf, Size: ${pdfResponse.data.byteLength} bytes`);
 
-  const pdfBuffer = Buffer.from(pdfResponse.data);
   const base64Pdf = pdfBuffer.toString('base64');
+  const mimeType = contentType && contentType.toLowerCase().includes('application/pdf') ? 'application/pdf' : 'application/octet-stream';
+  
   return {
-    dataUri: `data:application/pdf;base64,${base64Pdf}`,
+    dataUri: `data:${mimeType};base64,${base64Pdf}`,
     fileName: `${actualSaleOrderName}.pdf`.replace(/[\/\s]+/g, '_'),
     originalName: actualSaleOrderName,
     size: pdfBuffer.length,
@@ -206,6 +211,7 @@ export async function compareOrdersAction(
         } else if (lowerCaseMessage.includes("failed to download pdf") ||
                    lowerCaseMessage.includes("did not return a pdf document") ||
                    lowerCaseMessage.includes("odoo did not return a valid pdf") ||
+                   lowerCaseMessage.includes("returned an html page") ||
                    lowerCaseMessage.includes("returned content type")) {
             clientFacingMessage = `Odoo PDF Fetch Error: ${e.message}. Problem obtaining SO PDF from Odoo.`;
         } else if (lowerCaseMessage.includes("model not found") || lowerCaseMessage.includes("not found for api version") || (e.cause as any)?.message?.includes("NOT_FOUND")) {
@@ -230,5 +236,3 @@ export async function compareOrdersAction(
     return { error: finalClientMessage };
   }
 }
-
-    

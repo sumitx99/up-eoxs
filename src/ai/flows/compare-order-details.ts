@@ -10,7 +10,7 @@
  *
  * - compareOrderDetails - Compares order details from document content and identifies discrepancies, matches, and detailed product line comparisons.
  * - CompareOrderDetailsInput - The input type for the compareOrderDetails function, expecting documents as data URIs.
- * - CompareOrderDetailsOutput - The output type for the compareOrderDetails function.
+ * - CompareOrderDetailsOutput - The output type for the compareOrderdetails function.
  * - Discrepancy - Type for general discrepancies for Name, Address, and Payment Terms.
  * - ProductLineItemComparison - Type for detailed product line item comparisons.
  */
@@ -80,23 +80,14 @@ export async function compareOrderDetails(input: CompareOrderDetailsInput): Prom
 const compareOrderDetailsPrompt = ai.definePrompt({
   name: 'compareOrderDetailsPrompt',
   input: {
-    schema: InternalPromptInputSchema, 
+    schema: InternalPromptInputSchema,
   },
   output: {
-    schema: AiPermissiveOutputSchema, 
+    schema: AiPermissiveOutputSchema,
   },
   prompt: `You are an AI assistant specializing in comparing sales orders (SOs) with associated purchase orders (POs). Your goal is to meticulously analyze the provided documents and produce a structured JSON output detailing discrepancies.
 
 First, analyze the provided documents. They can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel format. Extract all text and data, paying attention to headers, line items, and footers from all pages.
-
-**Crucial Sanity Check for Odoo Login/Error Pages:**
-Before you begin, you **MUST** determine if the Sales Order document is a real order or an HTML page. An HTML page indicates an ERP connection error.
-**Hallmarks of an HTML Page:** The content will start with '<!DOCTYPE html>' and contain tags like '<html>' and '<body>'. It may also contain phrases like "Log in to your account" or 'data-oe-company-name' attributes.
-**If you detect an HTML page:**
-1.  **STOP** normal processing. Do not extract any order data (like buyer names, addresses, or products) from this HTML.
-2.  Populate the 'discrepancies' array with an entry for 'Name', 'Address', and 'Payment Terms', setting their 'soValue' to "SO is an HTML page, not a valid document." and 'poValue' based on the PO.
-3.  All product line items from the Purchase Order should be marked 'PO_ONLY'.
-4.  This check is your highest priority.
 
 Sales Order Document:
 {{media url=salesOrderPdfDataUri}}
@@ -116,7 +107,7 @@ After extracting the data, you must produce a JSON object with two lists: 'produ
 
 **1. Product Line Item Comparisons ('productLineItemComparisons' array):**
    Compare the line items from the SO and the first PO. For each comparison, create an object with the specified fields.
-   
+
    *Matching Rules*:
    - **Descriptions**: Compare descriptions fuzzily. Ignore punctuation, case, ordering of numeric descriptors, and synonyms (e.g., THK vs. THICK). For example, treat 'DISC BLANK, 6.25"OD X 2" THICK' and 'Plate A240 2" Circle 6.25 OD' as a potential match. A true match depends on the other fields aligning.
    - **Status Determination**:
@@ -188,7 +179,7 @@ const compareOrderDetailsFlow = ai.defineFlow(
         }
         return isValid;
       });
-      
+
       const additionalPOs = validPoUris.slice(1);
       const internalPromptInput: InternalPromptInput = {
         salesOrderPdfDataUri: input.salesOrderPdfDataUri,
@@ -207,14 +198,14 @@ const compareOrderDetailsFlow = ai.defineFlow(
         console.error('CompareOrderDetailsFlow: AI model returned null or undefined output payload.');
         throw new Error('AI model failed to return valid comparison data. This might be due to an issue with the AI service or unprocessable document content.');
       }
-      
+
       const finalOutput: CompareOrderDetailsOutput = {
         discrepancies: Array.isArray(aiPermissiveOutput.discrepancies) ? aiPermissiveOutput.discrepancies : [],
         productLineItemComparisons: Array.isArray(aiPermissiveOutput.productLineItemComparisons) ? aiPermissiveOutput.productLineItemComparisons : [],
       };
-      
+
       return finalOutput;
-    } catch (error: unknown) { 
+    } catch (error: unknown) {
       console.error("Error in compareOrderDetailsFlow: ", error);
       let errorMessage = "An unexpected error occurred in the AI flow.";
       if (error instanceof Error) {
