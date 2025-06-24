@@ -42,7 +42,7 @@ const DiscrepancySchema = z.object({
   field: z.enum(['Name', 'Address', 'Payment Terms']).describe('The general document field with a discrepancy.'),
   poValue: z.string().describe('The value from the purchase order document.'),
   soValue: z.string().describe('The value from the sales order document.'),
-  status: z.literal('MISMATCH_FIELD').describe('The status is always MISMATCH_FIELD for this type.'),
+  status: z.enum(['MISMATCH_FIELD']).describe('The status is always MISMATCH_FIELD for this type.'),
   notes: z.string().describe('A brief explanation of the discrepancy, e.g., "Address differs by punctuation or format."'),
 });
 export type Discrepancy = z.infer<typeof DiscrepancySchema>;
