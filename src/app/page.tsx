@@ -24,7 +24,7 @@ const initialActionState: CompareActionState = {
 
 function OrderComparatorClientContent() {
   const [salesOrderName, setSalesOrderName] = useState<string>('');
-  const [purchaseOrderFile, setPurchaseOrderFile] = useState<File | null>(null);
+  const [purchaseOrderFiles, setPurchaseOrderFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CompareOrderDetailsOutput | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -45,7 +45,7 @@ function OrderComparatorClientContent() {
       setComparisonResult(null);
       setError(null);
       setCurrentProcessedSOName(null);
-      setPurchaseOrderFile(null);
+      setPurchaseOrderFiles([]);
       setCurrentProcessedPOFileSignature(null);
       setPoFileSelectedText("Upload a Document");
       if (fileInputRef.current) {
@@ -57,32 +57,42 @@ function OrderComparatorClientContent() {
 
   const handlePOFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      setPurchaseOrderFile(event.target.files[0]);
+      setPurchaseOrderFiles(Array.from(event.target.files));
       setComparisonResult(null);
       setError(null);
-      setPoFileSelectedText("Uploaded Document");
+      setPoFileSelectedText(`${event.target.files.length} document(s) selected`);
     } else {
-      setPurchaseOrderFile(null);
+      setPurchaseOrderFiles([]);
       setPoFileSelectedText("Upload a Document");
     }
   };
 
-  const removePOFile = () => {
-    setPurchaseOrderFile(null);
+  const removePOFile = (fileToRemove: File) => {
+    const newFiles = purchaseOrderFiles.filter(file => file !== fileToRemove);
+    setPurchaseOrderFiles(newFiles);
     setCurrentProcessedPOFileSignature(null);
-    setPoFileSelectedText("Upload a Document");
-    if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+    if (newFiles.length === 0) {
+        setPoFileSelectedText("Upload a Document");
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    } else {
+        setPoFileSelectedText(`${newFiles.length} document(s) selected`);
     }
   };
 
+  const getPOFileSignature = (files: File[]) => {
+      if (!files || files.length === 0) return null;
+      return files.map(f => f.name + f.size).join(';');
+  }
+
   const handleSubmit = useCallback(async () => {
     const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
-    if (!salesOrderNameValid || !purchaseOrderFile) {
+    if (!salesOrderNameValid || purchaseOrderFiles.length === 0) {
       return;
     }
 
-    const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
+    const poFileSignature = getPOFileSignature(purchaseOrderFiles);
 
     if (salesOrderName === currentProcessedSOName &&
         poFileSignature === currentProcessedPOFileSignature &&
@@ -97,7 +107,9 @@ function OrderComparatorClientContent() {
 
     const formData = new FormData();
     formData.append('salesOrderName', salesOrderName);
-    formData.append('purchaseOrderFile', purchaseOrderFile);
+    purchaseOrderFiles.forEach(file => {
+        formData.append('purchaseOrderFile', file);
+    });
 
     try {
       const resultState = await compareOrdersAction(initialActionState, formData);
@@ -134,12 +146,12 @@ function OrderComparatorClientContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [salesOrderName, purchaseOrderFile, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]);
+  }, [salesOrderName, purchaseOrderFiles, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, toast]);
 
   useEffect(() => {
     const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
-    if (salesOrderNameValid && purchaseOrderFile) {
-      const poFileSignature = purchaseOrderFile.name + purchaseOrderFile.size;
+    if (salesOrderNameValid && purchaseOrderFiles.length > 0) {
+      const poFileSignature = getPOFileSignature(purchaseOrderFiles);
       const alreadyProcessedThisCombination = (
         salesOrderName === currentProcessedSOName &&
         poFileSignature === currentProcessedPOFileSignature &&
@@ -150,10 +162,10 @@ function OrderComparatorClientContent() {
          handleSubmit();
       }
     }
-  }, [salesOrderName, purchaseOrderFile, isLoading, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, handleSubmit]);
+  }, [salesOrderName, purchaseOrderFiles, isLoading, currentProcessedSOName, currentProcessedPOFileSignature, comparisonResult, error, handleSubmit]);
 
   const salesOrderNameValid = salesOrderName && salesOrderName.trim() !== '';
-  const poFileSignatureForCheck = purchaseOrderFile ? purchaseOrderFile.name + purchaseOrderFile.size : null;
+  const poFileSignatureForCheck = getPOFileSignature(purchaseOrderFiles);
   const alreadyProcessedThisCombination =
     salesOrderName === currentProcessedSOName &&
     poFileSignatureForCheck === currentProcessedPOFileSignature &&
@@ -174,7 +186,11 @@ function OrderComparatorClientContent() {
         iconColorClass = 'text-green-600 dark:text-green-400';
         statusText = 'partial match, details differ';
         break;
-      default: // Covers MISMATCH_*, PO_ONLY, SO_ONLY
+      case 'SO_ONLY':
+      case 'PO_ONLY':
+        icon = <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
+        break;
+      default: // Covers MISMATCH_*
         icon = <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
         break;
     }
@@ -216,28 +232,31 @@ function OrderComparatorClientContent() {
                           id="purchaseOrderFile"
                           name="purchaseOrderFile"
                           type="file"
+                          multiple
                           onChange={handlePOFileChange}
                           ref={fileInputRef}
                           className="block w-full text-base text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-0.5 file:text-base file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                           accept=".pdf,.png,.jpg,.jpeg,.csv,.xls,.xlsx"
                         />
-                        {poFileSelectedText === "Uploaded Document" ? (
+                         {purchaseOrderFiles.length > 0 ? (
                             <p className="text-sm text-green-600 dark:text-green-500 flex items-center">
                                 <CheckCircle className="h-4 w-4 mr-1 inline-block" /> {poFileSelectedText}
                             </p>
                         ) : (
                             <p className="text-sm text-muted-foreground">{poFileSelectedText}</p>
                         )}
-                        {purchaseOrderFile && (
+                        {purchaseOrderFiles.length > 0 && (
                           <div className="mt-2 space-y-1">
-                            <div className="flex items-center justify-between text-base text-muted-foreground p-2 border rounded-md">
-                              <span className="truncate" title={purchaseOrderFile.name}>
-                                {purchaseOrderFile.name} ({(purchaseOrderFile.size / 1024).toFixed(1)} KB)
-                              </span>
-                              <Button variant="ghost" size="icon" onClick={removePOFile} className="h-6 w-6 ml-2">
-                                <XCircle className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
+                            {purchaseOrderFiles.map((file, index) => (
+                                <div key={index} className="flex items-center justify-between text-base text-muted-foreground p-2 border rounded-md">
+                                <span className="truncate" title={file.name}>
+                                    {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                                </span>
+                                <Button variant="ghost" size="icon" onClick={() => removePOFile(file)} className="h-6 w-6 ml-2">
+                                    <XCircle className="h-4 w-4 text-destructive" />
+                                </Button>
+                                </div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -267,7 +286,7 @@ function OrderComparatorClientContent() {
                 </Alert>
               )}
 
-              {!isLoading && !error && !comparisonResult && !salesOrderNameValid && !purchaseOrderFile && (
+              {!isLoading && !error && !comparisonResult && !salesOrderNameValid && purchaseOrderFiles.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-xl">Ready for Comparison</p>
@@ -275,7 +294,7 @@ function OrderComparatorClientContent() {
                 </div>
               )}
 
-              {!isLoading && !error && !comparisonResult && salesOrderNameValid && !purchaseOrderFile && (
+              {!isLoading && !error && !comparisonResult && salesOrderNameValid && purchaseOrderFiles.length === 0 && (
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
                   <p className="text-xl">System ready.</p>
@@ -283,18 +302,18 @@ function OrderComparatorClientContent() {
                 </div>
               )}
 
-              {!isLoading && !error && !comparisonResult && !salesOrderNameValid && purchaseOrderFile && (
+              {!isLoading && !error && !comparisonResult && !salesOrderNameValid && purchaseOrderFiles.length > 0 && (
                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                   <FileText className="h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-xl">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFile.name}</span> selected.</p>
+                  <p className="text-xl">Purchase Order: <span className="font-semibold text-primary">{purchaseOrderFiles.length} file(s)</span> selected.</p>
                   <p className="text-base mt-2">Waiting for Sales Order identifier (via URL) to begin analysis.</p>
                 </div>
               )}
-               {!isLoading && !error && !comparisonResult && salesOrderNameValid && purchaseOrderFile && !alreadyProcessedThisCombination && (
+               {!isLoading && !error && !comparisonResult && salesOrderNameValid && purchaseOrderFiles.length > 0 && !alreadyProcessedThisCombination && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center pt-10">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                     <p className="text-xl">Preparing to compare...</p>
-                    <p className="text-base">Purchase Order: {purchaseOrderFile.name}</p>
+                    <p className="text-base">{purchaseOrderFiles.length} Purchase Order file(s) selected.</p>
                 </div>
               )}
 
@@ -441,23 +460,5 @@ export default function OrderComparatorPage() {
     </Suspense>
   );
 }
-    
 
     
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

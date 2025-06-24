@@ -149,8 +149,8 @@ Based on your analysis of the document contents, provide the following in a vali
 
    **A. Document-Level Field Discrepancies:**
       - Meticulously compare **general document fields that are NOT product line items** between the Sales Order and the **first Purchase Order (if provided and processed)**. These include, but are not limited to: PO Number, Order Date, Buyer/Seller names and addresses, Shipping/Billing addresses, Payment Terms, Shipping Terms, Incoterms, overall document Subtotals, overall Taxes, overall Discounts, and Grand Totals.
-      - **Pay extremely close attention to Buyer/Customer names and their full addresses (Shipping and Billing). Even minor differences in names (e.g., 'Titan Steel Works' vs. 'Steel America') or any significant differences in address components (street, city, state, zip code) MUST be flagged as discrepancies.** Do not assume entities are the same if their names or addresses show such variations.
-      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address", "Buyer Name"), 'purchaseOrderValue' (from first PO, or "No PO Provided", or "PO Not Processed"), 'salesOrderValue', and 'reason' for the discrepancy (e.g., "Buyer names differ", "Shipping addresses do not match").
+      - **Pay extremely close attention to Buyer/Customer names and their full addresses (Shipping and Billing), and any specified Payment Terms. Even minor differences in names (e.g., 'Titan Steel Works' vs. 'Steel America') or any significant differences in address components (street, city, state, zip code) MUST be flagged as discrepancies.** Do not assume entities are the same if their names or addresses show such variations. Apply the same detailed comparison to Payment Terms.
+      - For any discrepancies found in these **document-level fields**, populate the 'discrepancies' array with objects specifying: 'field' (e.g., "Payment Terms", "Grand Total", "Buyer Address", "Buyer Name"), 'purchaseOrderValue' (from first PO, or "No PO Provided", or "PO Not Processed"), 'salesOrderValue', and 'reason' for the discrepancy (e.g., "Buyer names differ", "Shipping addresses do not match", "Payment terms differ").
 
    **B. Unmatched Product Line Item Discrepancies:**
       - During your detailed product line item analysis (detailed in section 2 below), you will identify some products as 'PO_ONLY' or 'SO_ONLY'.
@@ -172,21 +172,22 @@ Based on your analysis of the document contents, provide the following in a vali
       - **For critical fields like Buyer names and full addresses, only list them as 'matchedItems' if they are an exact or near-exact text match (use 'exact' for 'matchQuality'). If there are notable differences, they should be listed as discrepancies instead.** Avoid using 'inferred' for these specific fields unless the evidence is overwhelmingly strong across multiple related sub-fields and you explicitly state the basis of this strong inference in the 'comparisonNotes' or overall 'summary'. If in doubt about a match for such critical fields, list it as a discrepancy.
 
 **2. Detailed Product Line Item Comparison (for 'productLineItemComparisons' array):**
-   - Perform a detailed comparison of product line items between the SO and the **first PO (if one was provided and processed)**. For each product line item found in the SO, try to find its corresponding item in the first PO (and vice-versa). Strive to find the best possible match for product descriptions, even if there are minor wording differences, acronyms, or variations in item codes/SKUs. Focus on semantic similarity where appropriate.
+   - Perform a detailed comparison of product line items between the SO and the **first PO (if one was provided and processed)**.
+   - **Matching Philosophy:** Strive to find the best possible match for product descriptions, even if there are minor wording differences, punctuation, acronyms, or variations in item codes/SKUs (e.g. '2205 PLATE A240 1.75" Circle 8.0 OD' should be considered a match for 'DISC BLANK, 8"OD X 1.75" THK'). Focus on semantic similarity and the core product being described. Do not flag a description mismatch for these minor variations. A true description mismatch is when the products are fundamentally different.
+   - Once a potential product pairing is identified based on description/SKU, you *must* then thoroughly compare their respective quantities, unit prices, and total prices to determine the correct status. Do not assume a full match based on description alone.
    - If no PO was provided or processed, all SO line items should be marked as 'SO_ONLY'.
    - For each identified product line item pairing (or an item found only in one document):
-     - Once a potential product pairing is identified based on description/SKU, you *must* then thoroughly compare their respective quantities, unit prices, and total prices to determine the correct status. Do not assume a full match based on description alone; all corresponding details for that line item must be scrutinized.
      - Extract 'poProductDescription', 'poQuantity', 'poUnitPrice', 'poTotalPrice' from the **first PO (if available and processed)**. Use "N/A", "No PO Provided", or "PO Not Processed" if the item is SO_ONLY, no PO was provided/processed, or if a specific detail is not present/extractable from the PO line item.
      - Extract 'soProductDescription', 'soQuantity', 'soUnitPrice', 'soTotalPrice' from the SO. Use "N/A" if the item is PO_ONLY or if a specific detail is not present/extractable from the SO line item.
      - Determine a 'status':
-       - 'MATCHED': If description, quantity, and prices (unit and total, or equivalent if one is missing but calculable) appear to match closely or are equivalent between SO and first PO.
+       - 'MATCHED': If description is semantically similar AND quantity and prices (unit and total, or equivalent if one is missing but calculable) appear to match closely or are equivalent between SO and first PO.
        - 'MISMATCH_QUANTITY': If quantities differ significantly.
        - 'MISMATCH_UNIT_PRICE': If unit prices differ significantly.
        - 'MISMATCH_TOTAL_PRICE': If total line item prices differ significantly (and unit price/qty might also be causes).
-       - 'MISMATCH_DESCRIPTION': If products seem related (e.g., similar SKUs) but descriptions have notable, irreconcilable differences.
+       - 'MISMATCH_DESCRIPTION': If products seem related but descriptions have notable, fundamentally different details that cannot be reconciled.
        - 'PO_ONLY': If the item is found only in the first Purchase Order (and it was processed) and has no corresponding item in the Sales Order.
-       - 'SO_ONLY': If the item is found only in the Sales Order and has no corresponding item in the first Purchase Order (or if no PO was provided/processed).
-       - 'PARTIAL_MATCH_DETAILS_DIFFER': If it's likely the same core product but some key details (other than quantity or price that would trigger a specific mismatch status) are inconsistent, or if the match is inferred with lower confidence.
+       - 'SO_ONLY': **Use this status if the item is found only in the Sales Order** and has no corresponding item in the first Purchase Order (or if no PO was provided/processed). The PO-side fields for this item should be empty or 'N/A'.
+       - 'PARTIAL_MATCH_DETAILS_DIFFER': Use this sparingly. Reserve it for cases where it's likely the same core product but some key details (other than quantity or price that would trigger a specific mismatch status) are inconsistent, or if the match is inferred with lower confidence. **Do not use this for items that are clearly only in one document; use 'SO_ONLY' or 'PO_ONLY' instead.**
      - Provide 'comparisonNotes': A brief explanation for the status (e.g., "Quantities differ (PO: 5, SO: 4)", "Unit prices mismatch", "Product found only in PO", "SO item, no PO provided for comparison", "SO item, PO not processed").
    - Populate the 'productLineItemComparisons' array with these objects. If no product line items are found in either document (or only in SO and no PO provided/processed), this array should reflect that (e.g., list SO items as SO_ONLY, or be empty if SO is also empty).
 
@@ -301,3 +302,4 @@ const compareOrderDetailsFlow = ai.defineFlow(
   }
 );
 
+    

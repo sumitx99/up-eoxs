@@ -126,7 +126,7 @@ export async function compareOrdersAction(
 ): Promise<CompareActionState> {
   console.log("SERVER_ACTION: compareOrdersAction invoked.");
   const salesOrderUserInputName = formData.get('salesOrderName') as string | null;
-  const purchaseOrderFile = formData.get('purchaseOrderFile') as File | null; // Changed to single file
+  const purchaseOrderFiles = formData.getAll('purchaseOrderFile') as File[];
 
   if (!salesOrderUserInputName || salesOrderUserInputName.trim() === '') {
     return { error: 'Sales Order name/sequence is required.' };
@@ -155,22 +155,28 @@ export async function compareOrdersAction(
       `SERVER_ACTION: Successfully fetched Sales Order PDF: ${salesOrderDetails.originalName} (ID: ${salesOrderDetails.saleOrderId}, Size: ${salesOrderDetails.size} bytes)`
     );
 
-    // 2) Process manually uploaded Purchase Order file
+    // 2) Process manually uploaded Purchase Order files
     const purchaseOrderDataUris: string[] = [];
-    if (purchaseOrderFile && purchaseOrderFile.size > 0) {
-      console.log(`SERVER_ACTION: Processing manually uploaded Purchase Order file: ${purchaseOrderFile.name}`);
-      try {
-          const buffer = await purchaseOrderFile.arrayBuffer();
-          const base64String = Buffer.from(buffer).toString('base64');
-          const dataUri = `data:${purchaseOrderFile.type || 'application/octet-stream'};base64,${base64String}`;
-          purchaseOrderDataUris.push(dataUri);
-          console.log(`SERVER_ACTION: Converted uploaded PO file ${purchaseOrderFile.name} (Type: ${purchaseOrderFile.type}, Size: ${purchaseOrderFile.size} bytes) to data URI.`);
-      } catch (fileReadError: any) {
-          console.error(`SERVER_ACTION: Error reading or converting uploaded file ${purchaseOrderFile.name}: ${fileReadError.message}`);
-          return { error: `Failed to read uploaded Purchase Order file: ${purchaseOrderFile.name}. Error: ${fileReadError.message}` };
+    console.log(`SERVER_ACTION: Found ${purchaseOrderFiles.length} purchase order file(s) in form data.`);
+
+    for (const file of purchaseOrderFiles) {
+      if (file && file.size > 0) {
+        console.log(`SERVER_ACTION: Processing manually uploaded Purchase Order file: ${file.name}`);
+        try {
+            const buffer = await file.arrayBuffer();
+            const base64String = Buffer.from(buffer).toString('base64');
+            const dataUri = `data:${file.type || 'application/octet-stream'};base64,${base64String}`;
+            purchaseOrderDataUris.push(dataUri);
+            console.log(`SERVER_ACTION: Converted uploaded PO file ${file.name} (Type: ${file.type}, Size: ${file.size} bytes) to data URI.`);
+        } catch (fileReadError: any) {
+            console.error(`SERVER_ACTION: Error reading or converting uploaded file ${file.name}: ${fileReadError.message}`);
+            return { error: `Failed to read uploaded Purchase Order file: ${file.name}. Error: ${fileReadError.message}` };
+        }
       }
-    } else {
-      console.log("SERVER_ACTION: No Purchase Order file was uploaded by the user or file is empty.");
+    }
+    
+    if (purchaseOrderDataUris.length === 0) {
+        console.log("SERVER_ACTION: No valid Purchase Order files were processed or uploaded.");
     }
     
     // 3) Call AI to compare
@@ -223,3 +229,5 @@ export async function compareOrdersAction(
     return { error: finalClientMessage };
   }
 }
+
+    
