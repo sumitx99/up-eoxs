@@ -106,7 +106,16 @@ The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) 
 - If the document is a CSV or Excel file, parse the tabular data to identify order details. Look for headers like 'Product', 'Item', 'Quantity', 'Price', 'Amount', 'Discount', 'Tax', 'PO Number', 'Buyer', 'Vendor', 'Payment Terms', etc.
 - If the document is a PDF, extract its textual content thoroughly from all pages.
 
-**Initial Document Sanity Check:** Before detailed analysis, you must first inspect the provided documents. If a document's content appears to be an HTML page (e.g., contains \`<!DOCTYPE html>\`, \`<html>\`, etc.), particularly a login or error page, instead of a proper order document, you **MUST NOT** attempt to extract order details from it. Instead, you must report this problem in the 'summary' field. For example, if the Sales Order is an HTML page, your summary should start with: "The Sales Order document provided was an HTML page, not a valid order document. This typically indicates an ERP connection or authentication error." Then, treat that document as if it were not provided for the rest of the comparison.
+**Crucial Sanity Check for Odoo Login/Error Pages:**
+The Sales Order is fetched from an Odoo ERP. Sometimes, if there is a connection or login problem, Odoo will return an HTML login page instead of the PDF document.
+You **MUST** first determine if the Sales Order document is a real order or an HTML page.
+**Hallmarks of an Odoo Login Page:** The content will contain HTML tags like \`<!DOCTYPE html>\`, \`<html>\`, \`<body>\`, and will often include phrases like "Log in to your account" or company names like "Steel America" in the HTML metadata (e.g., \`<html... data-oe-company-name="Steel America">\`).
+If you detect that the Sales Order document is an HTML page:
+1.  **DO NOT** extract any data from it. Do not list "Steel America" or any other data from the HTML page as the 'salesOrderValue'.
+2.  The 'salesOrderValue' for all discrepancies must be "SO is an HTML page, not a valid document."
+3.  All product line items from the Purchase Order should be marked 'PO_ONLY'.
+4.  The summary MUST state: "Error: The Sales Order document provided was an HTML page, not a valid order document. This indicates an Odoo connection or authentication error. Comparison was made against the PO only."
+This check is your highest priority. Failing to detect this will result in incorrect and unusable data.
 
 Analyze the content of the following Sales Order document and any provided Purchase Order documents, keeping the sanity check in mind:
 Ensure you process all pages and sections of each document.
