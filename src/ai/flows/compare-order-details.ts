@@ -106,7 +106,9 @@ The documents can be in PDF, image (e.g., JPEG, PNG), CSV, or Excel (XLS, XLSX) 
 - If the document is a CSV or Excel file, parse the tabular data to identify order details. Look for headers like 'Product', 'Item', 'Quantity', 'Price', 'Amount', 'Discount', 'Tax', 'PO Number', 'Buyer', 'Vendor', 'Payment Terms', etc.
 - If the document is a PDF, extract its textual content thoroughly from all pages.
 
-Analyze the content of the following Sales Order document and any provided Purchase Order documents:
+**Initial Document Sanity Check:** Before detailed analysis, you must first inspect the provided documents. If a document's content appears to be an HTML page (e.g., contains \`<!DOCTYPE html>\`, \`<html>\`, etc.), particularly a login or error page, instead of a proper order document, you **MUST NOT** attempt to extract order details from it. Instead, you must report this problem in the 'summary' field. For example, if the Sales Order is an HTML page, your summary should start with: "The Sales Order document provided was an HTML page, not a valid order document. This typically indicates an ERP connection or authentication error." Then, treat that document as if it were not provided for the rest of the comparison.
+
+Analyze the content of the following Sales Order document and any provided Purchase Order documents, keeping the sanity check in mind:
 Ensure you process all pages and sections of each document.
 
 Sales Order Document:
