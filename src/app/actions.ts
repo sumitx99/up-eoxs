@@ -180,6 +180,7 @@ export async function compareOrdersAction(
     }
     
     // 3) Call AI to compare
+    console.log(`SERVER_ACTION: Calling compareOrderDetails with 1 SO and ${purchaseOrderDataUris.length} PO data URIs.`);
     const comparisonResult = await compareOrderDetails({
       salesOrderPdfDataUri: salesOrderDetails.dataUri,
       purchaseOrderPdfDataUris: purchaseOrderDataUris, 
