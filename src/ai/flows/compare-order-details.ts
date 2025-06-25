@@ -11,7 +11,7 @@
  * - compareOrderDetails - Compares order details from document content and identifies discrepancies, matches, and detailed product line comparisons.
  * - CompareOrderDetailsInput - The input type for the compareOrderDetails function, expecting documents as data URIs.
  * - CompareOrderDetailsOutput - The output type for the compareOrderdetails function.
- * - Discrepancy - Type for general discrepancies for Name, Address, and Payment Terms.
+ * - Discrepancy - Type for general discrepancies for Payment Terms.
  * - ProductLineItemComparison - Type for detailed product line item comparisons.
  */
 
@@ -39,11 +39,11 @@ type InternalPromptInput = z.infer<typeof InternalPromptInputSchema>;
 
 
 const DiscrepancySchema = z.object({
-  field: z.enum(['Name', 'Address', 'Payment Terms']).describe('The general document field with a discrepancy.'),
+  field: z.enum(['Payment Terms']).describe('The general document field with a discrepancy.'),
   poValue: z.string().describe('The value from the purchase order document.'),
   soValue: z.string().describe('The value from the sales order document.'),
   status: z.enum(['MISMATCH_FIELD']).describe('The status is always MISMATCH_FIELD for this type.'),
-  notes: z.string().describe('A brief explanation of the discrepancy, e.g., "Address differs by punctuation or format."'),
+  notes: z.string().describe('A brief explanation of the discrepancy, e.g., "Payment terms differ."'),
 });
 export type Discrepancy = z.infer<typeof DiscrepancySchema>;
 
@@ -62,7 +62,7 @@ const ProductLineItemComparisonSchema = z.object({
 export type ProductLineItemComparison = z.infer<typeof ProductLineItemComparisonSchema>;
 
 const StrictCompareOrderDetailsOutputSchema = z.object({
-  discrepancies: z.array(DiscrepancySchema).describe('A list of general discrepancies found for Name, Address, and Payment Terms.'),
+  discrepancies: z.array(DiscrepancySchema).describe('A list of general discrepancies found for Payment Terms.'),
   productLineItemComparisons: z.array(ProductLineItemComparisonSchema).describe('An array detailing the comparison of each product line item found in the documents.'),
 });
 export type CompareOrderDetailsOutput = z.infer<typeof StrictCompareOrderDetailsOutputSchema>;
@@ -120,14 +120,14 @@ After extracting the data, you must produce a JSON object with two lists: 'produ
    - **Notes**: Provide a brief explanation for the chosen status in 'comparisonNotes'.
 
 **2. General Discrepancies ('discrepancies' array):**
-   Compare the following general fields from the SO and the first PO. Use fuzzy logic to compare them. If they differ in any way, create a discrepancy object.
-   - **Fields to Compare**: 'Name', 'Address', 'Payment Terms'.
-   - **Output**: For each differing field, create one entry with:
-     - 'field': The name of the field ('Name', 'Address', or 'Payment Terms').
+   Compare the 'Payment Terms' from the SO and the first PO. Use fuzzy logic to compare them. If they differ in any way, create a discrepancy object.
+   - **Field to Compare**: 'Payment Terms'.
+   - **Output**: For a differing field, create one entry with:
+     - 'field': The name of the field ('Payment Terms').
      - 'poValue': The text from the PO.
      - 'soValue': The text from the SO.
      - 'status': Always set to "MISMATCH_FIELD".
-     - 'notes': A brief explanation, e.g., "Address differs by punctuation or format."
+     - 'notes': A brief explanation, e.g., "Payment terms differ."
 
 Produce a valid JSON object matching the output schema. Ensure all arrays are present, even if empty.
 `,
